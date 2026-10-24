@@ -398,13 +398,13 @@
         }
       }
     },
-    "查看课程与个人日程，大号小组件展示本周安排。" : {
+    "查看课程与个人日程，竖向超大号展示本周安排。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "See classes and personal events, with a weekly view in the large widget."
+            "value" : "See classes and personal events, with a weekly view in the extra-large portrait widget."
           }
         }
       }

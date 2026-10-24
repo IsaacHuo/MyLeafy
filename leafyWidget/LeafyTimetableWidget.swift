@@ -64,7 +64,7 @@ struct LeafyTimetableProvider: TimelineProvider {
 
 struct LeafyTimetableWidget: Widget {
     static var supportedFamilies: [WidgetFamily] {
-        var families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge]
+        var families: [WidgetFamily] = [.systemSmall, .systemMedium]
         if #available(iOS 27, *) { families.append(.systemExtraLargePortrait) }
         return families
     }
@@ -75,7 +75,7 @@ struct LeafyTimetableWidget: Widget {
                 .environment(\.locale, LeafyWidgetLanguagePreference.current.locale)
         }
         .configurationDisplayName(LeafyWidgetL10n.text("MyLeafy 课表"))
-        .description(LeafyWidgetL10n.text("查看课程与个人日程，大号小组件展示本周安排。"))
+        .description(LeafyWidgetL10n.text("查看课程与个人日程，竖向超大号展示本周安排。"))
         .supportedFamilies(Self.supportedFamilies)
         .contentMarginsDisabled()
     }
@@ -97,14 +97,11 @@ struct LeafyWidgetEntryView: View {
         return false
     }
 
-    private var isWeekFamily: Bool { family == .systemLarge || isExtraLarge }
-
     var body: some View {
         Group {
             if let archive = entry.archive, archive.isAuthenticated {
-                if isWeekFamily {
-                    LeafyWeekWidgetView(archive: archive, now: entry.date,
-                                        isExtraLarge: isExtraLarge, palette: palette)
+                if isExtraLarge {
+                    LeafyWeekWidgetView(archive: archive, now: entry.date, palette: palette)
                 } else {
                     LeafyDayWidgetView(entry: entry, archive: archive,
                                        isSmall: family == .systemSmall, palette: palette)
@@ -170,12 +167,6 @@ struct LeafyWidgetQuietState: View {
 }
 
 #Preview(as: .systemMedium) {
-    LeafyTimetableWidget()
-} timeline: {
-    LeafyTimetableProvider().previewEntry()
-}
-
-#Preview(as: .systemLarge) {
     LeafyTimetableWidget()
 } timeline: {
     LeafyTimetableProvider().previewEntry()

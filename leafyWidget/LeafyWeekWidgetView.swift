@@ -4,7 +4,6 @@ import WidgetKit
 struct LeafyWeekWidgetView: View {
     let archive: LeafyWidgetSnapshotArchive
     let now: Date
-    let isExtraLarge: Bool
     let palette: LeafyWidgetPalette
 
     var body: some View {
@@ -15,51 +14,37 @@ struct LeafyWeekWidgetView: View {
         let startMinute = min(Double(archive.defaultStartMinute), allSegments.map(\.startMinute).min() ?? 1440)
         let endMinute = max(Double(archive.defaultEndMinute), allSegments.map(\.endMinute).max() ?? 0)
         let uniqueCount = Set(allSegments.map { $0.item.id }).count
-        VStack(alignment: .leading, spacing: isExtraLarge ? 6 : 7) {
+        VStack(alignment: .leading, spacing: 6) {
             header(dates: dates)
             if uniqueCount == 0, days.contains(where: { $0.status == .needsUpdate }) {
                 LeafyWidgetQuietState(status: .needsUpdate, palette: palette)
             } else {
                 weekGrid(days: days, segments: segments, startMinute: startMinute, endMinute: endMinute)
             }
-            if isExtraLarge {
-                Rectangle().fill(palette.rule).frame(height: 0.5)
-                nextItemFooter
-            } else {
-                Link(destination: LeafyWidgetRoute.schedules.url) {
-                    HStack(spacing: 5) {
-                        Text(LeafyWidgetL10n.text("共 %d 项安排", uniqueCount))
-                        Spacer(minLength: 2)
-                        Image(systemName: "calendar")
-                        Text(LeafyWidgetL10n.text("个人日程"))
-                    }
-                    .font(.system(size: 9)).foregroundStyle(palette.secondary).lineLimit(1)
-                }
-            }
+            Rectangle().fill(palette.rule).frame(height: 0.5)
+            nextItemFooter
         }
         .foregroundStyle(palette.primary)
-        .padding(.horizontal, isExtraLarge ? 12 : 14)
-        .padding(.vertical, isExtraLarge ? 10 : 14)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
     }
 
     private func header(dates: [Date]) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
             Text(LeafyWidgetL10n.text("本周安排"))
-                .font(.system(size: isExtraLarge ? 17 : 15, weight: .semibold)).lineLimit(1)
+                .font(.system(size: 17, weight: .semibold)).lineLimit(1)
                 .layoutPriority(1)
             if let first = dates.first, let last = dates.last {
                 Text("\(shortDate(first))–\(shortDate(last))")
-                    .font(.system(size: isExtraLarge ? 11 : 10, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(palette.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
-            if isExtraLarge {
-                let temperature = archive.temperatureText(at: now)
-                let condition = archive.weatherConditionText(at: now).map(LeafyWidgetL10n.text)
-                Text(condition.map { "\(temperature) \($0)" } ?? temperature)
-                    .font(.system(size: 11, weight: .medium)).foregroundStyle(palette.secondary)
-                    .lineLimit(1).layoutPriority(1)
-            }
+            let temperature = archive.temperatureText(at: now)
+            let condition = archive.weatherConditionText(at: now).map(LeafyWidgetL10n.text)
+            Text(condition.map { "\(temperature) \($0)" } ?? temperature)
+                .font(.system(size: 11, weight: .medium)).foregroundStyle(palette.secondary)
+                .lineLimit(1).layoutPriority(1)
         }
     }
 
@@ -112,7 +97,7 @@ struct LeafyWeekWidgetView: View {
     private func weekGrid(days: [LeafyWidgetDaySnapshot], segments: [[LeafyWidgetDaySegment]],
                           startMinute: Double, endMinute: Double) -> some View {
         GeometryReader { geometry in
-            let headerHeight: CGFloat = isExtraLarge ? 38 : 36
+            let headerHeight: CGFloat = 38
             let height = max(geometry.size.height - headerHeight, 1)
             let range = max(endMinute - startMinute, 1)
             HStack(alignment: .top, spacing: 2) {
@@ -128,7 +113,7 @@ struct LeafyWeekWidgetView: View {
                         LeafyWeekDayColumn(
                             blocks: LeafyWidgetWeekBlock.layout(segments[index], minimumMinutes: 20 / height * range),
                             startMinute: startMinute, endMinute: endMinute, now: now,
-                            isToday: isToday, isExtraLarge: isExtraLarge, palette: palette
+                            isToday: isToday, palette: palette
                         )
                         .frame(height: height)
                     }
@@ -143,9 +128,9 @@ struct LeafyWeekWidgetView: View {
             Text(date.formatted(.dateTime.weekday(.narrow).locale(LeafyWidgetLanguagePreference.current.locale)))
                 .font(.system(size: 10, weight: .medium)).foregroundStyle(palette.secondary)
             Text(String(LeafyWidgetSnapshotArchive.calendar.component(.day, from: date)))
-                .font(.system(size: isExtraLarge ? 12 : 11, weight: .semibold)).monospacedDigit()
+                .font(.system(size: 12, weight: .semibold)).monospacedDigit()
                 .foregroundStyle(isToday ? palette.onAccent : palette.primary)
-                .frame(width: isExtraLarge ? 23 : 21, height: isExtraLarge ? 23 : 21)
+                .frame(width: 23, height: 23)
                 .background {
                     if isToday {
                         Circle().fill(palette.brand.opacity(palette.isFullColor ? 1 : 0.22)).widgetAccentable()
@@ -158,14 +143,14 @@ struct LeafyWeekWidgetView: View {
     }
 
     private func timeAxis(start: Double, end: Double, height: CGFloat) -> some View {
-        let interval = isExtraLarge ? 60.0 : 120.0
+        let interval = 60.0
         let ticks = [start] + stride(from: (floor(start / interval) + 1) * interval, to: end, by: interval).filter {
             $0 - start >= 40 && end - $0 >= 40
         } + [end]
         return ZStack(alignment: .top) {
             ForEach(ticks, id: \.self) { minute in
                 Text(String(format: "%02d:%02d", Int(minute) / 60, Int(minute) % 60))
-                    .font(.system(size: isExtraLarge ? 9 : 8, weight: .medium)).monospacedDigit()
+                    .font(.system(size: 9, weight: .medium)).monospacedDigit()
                     .foregroundStyle(palette.tertiary)
                     .position(
                         x: 14,
@@ -183,13 +168,12 @@ private struct LeafyWeekDayColumn: View {
     let endMinute: Double
     let now: Date
     let isToday: Bool
-    let isExtraLarge: Bool
     let palette: LeafyWidgetPalette
 
     var body: some View {
         GeometryReader { geometry in
             let scale = geometry.size.height / max(endMinute - startMinute, 1)
-            let tickInterval = isExtraLarge ? 60.0 : 120.0
+            let tickInterval = 60.0
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 5)
                     .fill(palette.brand.opacity(isToday ? 0.07 : 0.02))
@@ -206,7 +190,7 @@ private struct LeafyWeekDayColumn: View {
                                          geometry.size.height - y), 1)
                     Link(destination: block.hiddenCount > 0 ? LeafyWidgetRoute.schedules.url : block.segment.item
                         .destination) {
-                            LeafyWeekBlockLabel(block: block, now: now, height: height, isExtraLarge: isExtraLarge,
+                            LeafyWeekBlockLabel(block: block, now: now, height: height,
                                                 palette: palette)
                         }
                         .frame(width: width, height: height)
@@ -222,7 +206,6 @@ private struct LeafyWeekBlockLabel: View {
     let block: LeafyWidgetWeekBlock
     let now: Date
     let height: CGFloat
-    let isExtraLarge: Bool
     let palette: LeafyWidgetPalette
 
     private var item: LeafyWidgetAgendaItem { block.segment.item }
@@ -247,7 +230,7 @@ private struct LeafyWeekBlockLabel: View {
             if block.hiddenCount > 0 {
                 Text("+\(block.hiddenCount)")
                     .font(.system(size: 10, weight: .semibold)).lineLimit(1)
-            } else if isExtraLarge, item.kind == .course, !item.locationText.isEmpty {
+            } else if item.kind == .course, !item.locationText.isEmpty {
                 ViewThatFits(in: .vertical) {
                     roomFirstLabel(titleLines: 4)
                     roomFirstLabel(titleLines: 3)
@@ -262,8 +245,8 @@ private struct LeafyWeekBlockLabel: View {
                 }
             }
         }
-        .padding(.horizontal, isExtraLarge ? 2 : 3)
-        .padding(.vertical, height >= 26 ? (isExtraLarge ? 2 : 3) : 1)
+        .padding(.horizontal, 2)
+        .padding(.vertical, height >= 26 ? 2 : 1)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(palette.primary)
         .multilineTextAlignment(.leading)
@@ -288,13 +271,21 @@ private struct LeafyWeekBlockLabel: View {
                 Text(item.title).font(.system(size: 10, weight: .semibold))
                     .lineLimit(titleLines).truncationMode(.tail)
             }
-            Text(item.locationText)
-                .font(.system(size: block.laneCount > 1 ? 8 : 9, weight: .medium))
-                .foregroundStyle(palette.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            locationLabel
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var locationLabel: some View {
+        let text = item.locationText.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return ViewThatFits(in: .horizontal) {
+            Text(text).font(.system(size: 9, weight: .medium)).fixedSize()
+            Text(text).font(.system(size: 8, weight: .medium)).fixedSize()
+            Text(text).font(.system(size: 8, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(palette.secondary)
     }
 
     private func itemLabel(showLocation: Bool) -> some View {
