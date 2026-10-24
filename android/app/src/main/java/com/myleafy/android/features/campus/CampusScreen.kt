@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -39,7 +38,6 @@ import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -196,29 +194,21 @@ internal fun CampusDashboard(
                 )
             }
         } else {
-            Column(modifier = Modifier.fillMaxSize()) {
-                CampusDomainChips(
-                    domains = domains,
-                    selectedDomain = selectedDomain,
-                    onDomainSelected = { selectedDomain = it },
-                )
-                CampusDomainContent(
-                    domain = selectedDomain,
-                    listState = listStates.getValue(selectedDomain),
-                    syncState = syncState,
-                    campusId = campusId,
-                    onRetrySync = onRetrySync,
-                    onConsumeSync = onConsumeSync,
-                    onGradesClick = onGradesClick,
-                    onExamsClick = onExamsClick,
-                    onClassroomClick = onClassroomClick,
-                    onCommunityClick = onCommunityClick,
-                    onScheduleClick = onScheduleClick,
-                    canUseCommunity = canUseCommunity,
-                    onFeatureClick = onFeatureClick,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            CampusAllToolsContent(
+                domains = domains,
+                syncState = syncState,
+                campusId = campusId,
+                onRetrySync = onRetrySync,
+                onConsumeSync = onConsumeSync,
+                onGradesClick = onGradesClick,
+                onExamsClick = onExamsClick,
+                onClassroomClick = onClassroomClick,
+                onCommunityClick = onCommunityClick,
+                onScheduleClick = onScheduleClick,
+                canUseCommunity = canUseCommunity,
+                onFeatureClick = onFeatureClick,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }
@@ -236,33 +226,316 @@ private enum class CampusDomain(val label: String, val supportingText: String) {
         this == Life || campusId == CampusID.bjfu || this == Teaching || this == Sports
 }
 
-@Composable
-private fun CampusDomainChips(
-    domains: List<CampusDomain>,
-    selectedDomain: CampusDomain,
-    onDomainSelected: (CampusDomain) -> Unit,
+private data class CampusToolItem(
+    val key: String,
+    val title: String,
+    val description: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
 ) {
-    LazyRow(
-        modifier = Modifier.testTag("campus-domain-chips"),
-        contentPadding = PaddingValues(horizontal = LeafySpacing.page, vertical = LeafySpacing.compact),
-        horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
+    val testTag: String get() = "campus-tool-$key"
+}
+
+/**
+ * 手机端只保留一个纵向入口列表：工具直接可见，不需要先横向选领域再点卡片。
+ * 平板继续使用左侧领域栏 + 右侧内容的双栏结构。
+ */
+@Composable
+private fun CampusAllToolsContent(
+    domains: List<CampusDomain>,
+    syncState: CampusSyncState,
+    campusId: CampusID?,
+    onRetrySync: () -> Unit,
+    onConsumeSync: () -> Unit,
+    onGradesClick: () -> Unit,
+    onExamsClick: () -> Unit,
+    onClassroomClick: () -> Unit,
+    onCommunityClick: () -> Unit,
+    onScheduleClick: () -> Unit,
+    canUseCommunity: Boolean,
+    onFeatureClick: (FeatureDestination) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val sections = domains.map { domain ->
+        domain to campusToolsFor(
+            domain = domain,
+            context = context,
+            campusId = campusId,
+            canUseCommunity = canUseCommunity,
+            onGradesClick = onGradesClick,
+            onExamsClick = onExamsClick,
+            onClassroomClick = onClassroomClick,
+            onCommunityClick = onCommunityClick,
+            onScheduleClick = onScheduleClick,
+            onFeatureClick = onFeatureClick,
+        )
+    }
+    LazyColumn(
+        modifier = modifier.widthIn(max = LeafyComponentSize.contentMaxWidth).testTag("campus-all-tools"),
+        contentPadding = PaddingValues(
+            start = LeafySpacing.page,
+            end = LeafySpacing.page,
+            top = LeafySpacing.micro,
+            bottom = LeafySpacing.spacious,
+        ),
+        verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
     ) {
-        items(domains, key = { it.name }) { domain ->
-            FilterChip(
-                selected = selectedDomain == domain,
-                onClick = { onDomainSelected(domain) },
-                modifier = Modifier.testTag("campus-domain-${domain.name}"),
-                label = { Text(domain.label) },
-                shape = androidx.compose.foundation.shape.CircleShape,
-                border = null,
-                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.leafySurfaces.grouped,
-                    selectedContainerColor = MaterialTheme.leafySurfaces.accentSoft,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        if (syncState is CampusSyncState.Success || syncState is CampusSyncState.Error) {
+            item(key = "campus-sync") {
+                CampusSyncBanner(
+                    syncState = syncState,
+                    onRetrySync = onRetrySync,
+                    onConsumeSync = onConsumeSync,
+                )
+            }
+        }
+        sections.forEach { (domain, tools) ->
+            item(key = "campus-section-${domain.name}") {
+                CampusSectionHeader(domain)
+            }
+            items(tools, key = { it.key }) { tool ->
+                CampusToolRow(
+                    title = tool.title,
+                    description = tool.description,
+                    icon = tool.icon,
+                    onClick = tool.onClick,
+                    modifier = Modifier.testTag(tool.testTag),
+                )
+            }
+        }
+    }
+}
+
+private fun campusToolsFor(
+    domain: CampusDomain,
+    context: android.content.Context,
+    campusId: CampusID?,
+    canUseCommunity: Boolean,
+    onGradesClick: () -> Unit,
+    onExamsClick: () -> Unit,
+    onClassroomClick: () -> Unit,
+    onCommunityClick: () -> Unit,
+    onScheduleClick: () -> Unit,
+    onFeatureClick: (FeatureDestination) -> Unit,
+): List<CampusToolItem> = when (domain) {
+    CampusDomain.Life -> buildList {
+        if (canUseCommunity) {
+            add(
+                CampusToolItem(
+                    key = "community",
+                    title = "校园社区",
+                    description = "校园动态、问答、互助与二手",
+                    icon = Icons.Outlined.Groups,
+                    onClick = onCommunityClick,
                 ),
             )
         }
+        add(
+            CampusToolItem(
+                key = "schedule",
+                title = "日迹记录",
+                description = "随记、个人日程、回顾与导出",
+                icon = Icons.AutoMirrored.Outlined.EventNote,
+                onClick = onScheduleClick,
+            ),
+        )
+    }
+
+    CampusDomain.Teaching -> buildList {
+        add(
+            CampusToolItem(
+                key = "grades",
+                title = "成绩查询",
+                description = "查看个人课程成绩",
+                icon = Icons.Outlined.Assessment,
+                onClick = onGradesClick,
+            ),
+        )
+        add(
+            CampusToolItem(
+                key = "exams",
+                title = "考试安排",
+                description = "查看考试时间和地点",
+                icon = Icons.Outlined.CalendarMonth,
+                onClick = onExamsClick,
+            ),
+        )
+        if (campusId == CampusID.bjfu) {
+            add(
+                CampusToolItem(
+                    key = "training",
+                    title = "教学与培养",
+                    description = "查看课程体系与应取学分",
+                    icon = Icons.Outlined.School,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_TRAINING_PLAN) },
+                ),
+            )
+            add(
+                CampusToolItem(
+                    key = "calendar",
+                    title = "校历与作息",
+                    description = "查看学期校历和作息时间",
+                    icon = Icons.Outlined.CalendarMonth,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_CALENDAR) },
+                ),
+            )
+            add(
+                CampusToolItem(
+                    key = "comprehensive",
+                    title = "综素测算",
+                    description = "估算综素分，整理材料",
+                    icon = Icons.Outlined.Functions,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_COMPREHENSIVE) },
+                ),
+            )
+        }
+        add(
+            CampusToolItem(
+                key = "honors",
+                title = "荣誉记录",
+                description = "在本机保存奖状证书等文件",
+                icon = Icons.Outlined.WorkspacePremium,
+                onClick = { onFeatureClick(FeatureDestination.CAMPUS_HONOR_RECORDS) },
+            ),
+        )
+    }
+
+    CampusDomain.SelfStudy -> buildList {
+        add(
+            CampusToolItem(
+                key = "classroom",
+                title = "空闲教室",
+                description = "按周次和星期查询可用教室",
+                icon = Icons.Outlined.Class,
+                onClick = onClassroomClick,
+            ),
+        )
+        if (campusId == CampusID.bjfu) {
+            add(
+                CampusToolItem(
+                    key = "library",
+                    title = "图书馆座位预约",
+                    description = "跳转链接",
+                    icon = Icons.AutoMirrored.Outlined.MenuBook,
+                    onClick = { openExternalUrl(context, "https://seat.bjfu.edu.cn/jsq-v/#/main/index") },
+                ),
+            )
+        }
+    }
+
+    CampusDomain.Sports -> buildList {
+        add(
+            CampusToolItem(
+                key = "run",
+                title = "阳光长跑",
+                description = "自定义目标次数、周期和假期周规则",
+                icon = Icons.AutoMirrored.Outlined.DirectionsRun,
+                onClick = { onFeatureClick(FeatureDestination.CAMPUS_SUNSHINE_RUN) },
+            ),
+        )
+        add(
+            CampusToolItem(
+                key = "fitness",
+                title = "体测记录",
+                description = "记录体测项目和成绩",
+                icon = Icons.Outlined.FitnessCenter,
+                onClick = { onFeatureClick(FeatureDestination.CAMPUS_FITNESS_TEST) },
+            ),
+        )
+        if (campusId == CampusID.bjfu) {
+            add(
+                CampusToolItem(
+                    key = "venues",
+                    title = "场馆开放",
+                    description = "场馆开放时间与预约方式",
+                    icon = Icons.Outlined.SportsBasketball,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_VENUES) },
+                ),
+            )
+        }
+    }
+
+    CampusDomain.Medical -> listOf(
+        CampusToolItem(
+            key = "medical",
+            title = "医疗事项",
+            description = "政策、报销指引与本机台账",
+            icon = Icons.Outlined.LocalHospital,
+            onClick = { onFeatureClick(FeatureDestination.CAMPUS_MEDICAL) },
+        ),
+    )
+
+    CampusDomain.Ratings -> listOf(
+        CampusToolItem(
+            key = "ratings",
+            title = "评价相关",
+            description = "评教、评课与评菜",
+            icon = Icons.Outlined.RateReview,
+            onClick = { onFeatureClick(FeatureDestination.CAMPUS_RATINGS) },
+        ),
+    )
+}
+
+@Composable
+private fun CampusSectionHeader(domain: CampusDomain) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = LeafySpacing.compact, bottom = LeafySpacing.tiny),
+    ) {
+        Text(
+            text = domain.label,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = domain.supportingText,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun CampusSyncBanner(
+    syncState: CampusSyncState,
+    onRetrySync: () -> Unit,
+    onConsumeSync: () -> Unit,
+) {
+    when (syncState) {
+        is CampusSyncState.Success -> {
+            val message = buildString {
+                append("同步完成")
+                syncState.grades?.let { append("：$it 条成绩") }
+                syncState.rankings?.let { append("，$it 条排名") }
+                syncState.exams?.let { append("，$it 场考试") }
+                if (syncState.warnings.isNotEmpty()) append("；${syncState.warnings.joinToString("；")}")
+            }
+            LeafyStatusBanner(
+                message = message,
+                isError = syncState.warnings.isNotEmpty(),
+                actionLabel = if (syncState.warnings.isNotEmpty()) "重试" else null,
+                onAction = if (syncState.warnings.isNotEmpty()) onRetrySync else null,
+                onDismiss = onConsumeSync,
+            )
+            LaunchedEffect(syncState) {
+                if (syncState.warnings.isEmpty()) {
+                    delay(3_000)
+                    onConsumeSync()
+                }
+            }
+        }
+
+        is CampusSyncState.Error -> LeafyStatusBanner(
+            message = syncState.message,
+            isError = true,
+            actionLabel = "重试",
+            onAction = onRetrySync,
+            onDismiss = onConsumeSync,
+        )
+
+        CampusSyncState.Idle, CampusSyncState.Syncing -> Unit
     }
 }
 
@@ -389,43 +662,15 @@ private fun CampusDomainContent(
         ),
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
     ) {
-        if (domain == CampusDomain.Teaching) {
-            when (syncState) {
-                is CampusSyncState.Success -> {
-                    val syncMessage = buildString {
-                        append("同步完成")
-                        syncState.grades?.let { append("：$it 条成绩") }
-                        syncState.rankings?.let { append("，$it 条排名") }
-                        syncState.exams?.let { append("，$it 场考试") }
-                        if (syncState.warnings.isNotEmpty()) append("；${syncState.warnings.joinToString("；")}")
-                    }
-                    item {
-                        LeafyStatusBanner(
-                            message = syncMessage, isError = syncState.warnings.isNotEmpty(),
-                            actionLabel = if (syncState.warnings.isNotEmpty()) "重试" else null,
-                            onAction = if (syncState.warnings.isNotEmpty()) onRetrySync else null,
-                            onDismiss = onConsumeSync,
-                        )
-                        // 成功提示短暂出现后自动收起。
-                        LaunchedEffect(syncState) {
-                            if (syncState.warnings.isEmpty()) {
-                                delay(3_000)
-                                onConsumeSync()
-                            }
-                        }
-                    }
-                }
-                // 失败保留在屏幕上，直到用户重试、同步成功或主动关闭。
-                is CampusSyncState.Error -> item {
-                    LeafyStatusBanner(
-                        message = syncState.message,
-                        isError = true,
-                        actionLabel = "重试",
-                        onAction = onRetrySync,
-                        onDismiss = onConsumeSync,
-                    )
-                }
-                CampusSyncState.Idle, CampusSyncState.Syncing -> Unit
+        if (domain == CampusDomain.Teaching &&
+            (syncState is CampusSyncState.Success || syncState is CampusSyncState.Error)
+        ) {
+            item {
+                CampusSyncBanner(
+                    syncState = syncState,
+                    onRetrySync = onRetrySync,
+                    onConsumeSync = onConsumeSync,
+                )
             }
         }
 

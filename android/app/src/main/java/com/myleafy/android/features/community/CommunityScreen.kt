@@ -23,9 +23,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -335,17 +337,56 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
                         modifier = Modifier.padding(start = 6.dp),
                     )
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     if (post.pin != null) {
                         Text("置顶", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                     }
-                    post.category?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
-                    Text(relativeDateLabel(post.created_at), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("${post.like_count} 赞", style = MaterialTheme.typography.labelSmall)
-                    Text("${post.comment_count} 评论", style = MaterialTheme.typography.labelSmall)
-                    if (post.viewer_has_favorited) Text("已收藏", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    post.category?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Text(
+                        text = relativeDateLabel(post.created_at),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ThumbUp,
+                            contentDescription = "赞",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = "${post.like_count}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.testTag("community-like-count-${post.id}"),
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = "评论",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = "${post.comment_count}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.testTag("community-comment-count-${post.id}"),
+                        )
+                    }
+                    if (post.viewer_has_favorited) {
+                        Text("已收藏", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
         }
@@ -392,7 +433,7 @@ private fun relativeDateLabel(iso: String): String {
     return when {
         date == today -> "今天"
         date == today.minusDays(1) -> "昨天"
-        date.year == today.year -> "${date.monthValue}月${date.dayOfMonth}日"
-        else -> "${date.year}.${date.monthValue}.${date.dayOfMonth}"
+        date.year == today.year -> "${date.monthValue}/${date.dayOfMonth}"
+        else -> "${date.year}/${date.monthValue}/${date.dayOfMonth}"
     }
 }

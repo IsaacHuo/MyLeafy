@@ -180,7 +180,7 @@ class RootNavigationSmokeTest {
     fun secondaryDestinationHidesBottomBarAndBackRestoresIt() {
         activateCommunityScope()
         composeRule.onNodeWithTag("root-tab-campus").performClick()
-        composeRule.onNodeWithTag("campus-life-community").performClick()
+        composeRule.onNodeWithTag("campus-tool-community").performClick()
         composeRule.onNodeWithContentDescription("搜索社区").performClick()
 
         composeRule.onNodeWithText("搜索社区").assertIsDisplayed()
@@ -231,8 +231,8 @@ class RootNavigationSmokeTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("root-tab-campus").performClick()
-        composeRule.onNodeWithTag("campus-life-schedule").assertExists()
-        composeRule.onNodeWithTag("campus-life-community").assertDoesNotExist()
+        composeRule.onNodeWithTag("campus-tool-schedule").assertExists()
+        composeRule.onNodeWithTag("campus-tool-community").assertDoesNotExist()
     }
 
     @After
@@ -242,49 +242,41 @@ class RootNavigationSmokeTest {
     }
 
     @Test
-    fun everyCampusToolOpensAndReturnsToItsOriginalCategory() {
+    fun everyCampusToolOpensAndReturnsToCampus() {
         activateCommunityScope()
         composeRule.onNodeWithTag("root-tab-campus").performClick()
         fun back() {
             composeRule.onNodeWithContentDescription("返回").performClick()
             composeRule.waitForIdle()
         }
-        val tools = linkedMapOf(
-            "Teaching" to listOf("成绩查询", "考试安排", "教学与培养", "校历与作息", "综素测算", "荣誉记录"),
-            "SelfStudy" to listOf("空闲教室"),
-            "Sports" to listOf("阳光长跑", "体测记录", "场馆开放"),
+        // 手机端是一个纵向全量列表：工具直接可见，不再先选领域。
+        val tools = listOf(
+            "community",
+            "schedule",
+            "grades",
+            "exams",
+            "training",
+            "calendar",
+            "comprehensive",
+            "honors",
+            "classroom",
+            "run",
+            "fitness",
+            "venues",
+            "medical",
+            "ratings",
         )
-        for ((domain, entries) in tools) {
-            selectCampusDomain(domain)
-            for (title in entries) {
-                composeRule.onNodeWithText(title).performScrollTo().performClick()
-                composeRule.waitForIdle()
-                composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
-                back()
-                selectCampusDomain(domain)
-                composeRule.onNodeWithTag("campus-domain-$domain").assertIsSelected()
-            }
+        tools.forEach { key ->
+            openCampusTool(key)
+            composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
+            back()
+            composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
         }
-        composeRule.onNodeWithTag("root-tab-timetable").performClick()
-        composeRule.onNodeWithTag("root-tab-campus").performClick()
-        // Sports 是最后一个可见的窄屏胶囊；先恢复它再滚动到医疗/评价领域。
-        selectCampusDomain("Sports")
-        composeRule.onNodeWithTag("campus-domain-Sports").assertIsSelected()
-        selectCampusDomain("Medical")
-        composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
-        selectCampusDomain("Ratings")
-        composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
     }
 
-    /** 校园领域在窄屏是横向 LazyRow、宽屏是竖向栏；先滚动到目标再点击。 */
-    private fun selectCampusDomain(domain: String) {
-        val tag = "campus-domain-$domain"
-        val chips = composeRule.onAllNodesWithTag("campus-domain-chips").fetchSemanticsNodes()
-        if (chips.isNotEmpty()) {
-            composeRule.onNodeWithTag("campus-domain-chips").performScrollToNode(hasTestTag(tag))
-        } else {
-            composeRule.onNodeWithTag("campus-domain-sidebar").performScrollToNode(hasTestTag(tag))
-        }
+    private fun openCampusTool(key: String) {
+        val tag = "campus-tool-$key"
+        composeRule.onNodeWithTag("campus-all-tools").performScrollToNode(hasTestTag(tag))
         composeRule.onNodeWithTag(tag).performClick()
         composeRule.waitForIdle()
     }
@@ -339,8 +331,7 @@ class RootNavigationSmokeTest {
     @Test fun allComprehensiveCollegeRulesRenderWithoutCrashing() {
         activateCommunityScope()
         composeRule.onNodeWithTag("root-tab-campus").performClick()
-        selectCampusDomain("Teaching")
-        composeRule.onNodeWithText("综素测算").performScrollTo().performClick()
+        openCampusTool("comprehensive")
         com.myleafy.android.features.campus.ComprehensiveQualityRuleCatalog.participatingCollegeNames.forEach { name ->
             composeRule.onNodeWithTag("comprehensive-colleges").performScrollToNode(hasText(name))
             composeRule.onNodeWithText(name).performClick()

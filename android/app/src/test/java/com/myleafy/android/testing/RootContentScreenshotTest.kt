@@ -1,4 +1,5 @@
 package com.myleafy.android.testing
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 
 import android.app.Application
@@ -166,9 +167,11 @@ class RootContentScreenshotTest {
             }
         }
         composeRule.waitForIdle()
-        // 校园默认进入“校园生活”；截图沿用学校教学列表，保持原有覆盖面。
-        composeRule.onNodeWithTag("campus-domain-Teaching").performClick()
-        composeRule.waitForIdle()
+        // 手机端展示全量纵向列表；平板端沿用侧栏，截图覆盖学校教学。
+        if (composeRule.onAllNodesWithTag("campus-domain-Teaching").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("campus-domain-Teaching").performClick()
+            composeRule.waitForIdle()
+        }
         capture()
     }
 

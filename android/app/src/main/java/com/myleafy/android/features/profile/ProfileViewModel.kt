@@ -54,10 +54,12 @@ class ProfileViewModel(
                 refreshJob?.cancel()
                 latestSettings = s
                 val local = ProfileUiState.Local(s.campusId, s.eduId)
-                _uiState.value = if (s.eduId.isNullOrBlank()) {
-                    local
+                if (s.eduId.isNullOrBlank()) {
+                    _uiState.value = local
                 } else {
-                    loadProfile(s.campusId, s.eduId)
+                    // 资料页不等待社区请求：先显示本机身份和设置，远端资料返回后再替换头像/昵称。
+                    _uiState.value = local
+                    _uiState.value = loadProfile(s.campusId, s.eduId)
                 }
             }
         }
@@ -92,7 +94,6 @@ class ProfileViewModel(
     }
 
     private suspend fun loadProfile(campusId: String, eduId: String): ProfileUiState {
-        _uiState.value = ProfileUiState.ProfileLoading
         return runCatching { repository.fetchProfile() }
             .fold(
                 onSuccess = { profile ->

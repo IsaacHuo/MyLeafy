@@ -82,8 +82,10 @@ class CoreVisualReviewTest {
         variants.forEach { next ->
             compose.runOnIdle { variant = next }
             compose.waitForIdle()
-            if (next.page == "campus") {
-                // 校园默认进入“校园生活”；核心页面评审仍覆盖学校教学列表。
+            if (next.page == "campus" &&
+                compose.onAllNodesWithTag("campus-domain-Teaching").fetchSemanticsNodes().isNotEmpty()
+            ) {
+                // 宽屏仍是侧栏 + 内容，核心页面评审继续覆盖学校教学列表。
                 compose.onNodeWithTag("campus-domain-Teaching").performClick()
                 compose.waitForIdle()
             }

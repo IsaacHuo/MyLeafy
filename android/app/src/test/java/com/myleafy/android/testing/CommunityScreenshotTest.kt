@@ -113,7 +113,7 @@ class CommunityScreenshotTest {
         composeRule.runOnIdle { assertEquals("2", selectedPostId) }
 
         composeRule
-            .onNodeWithText("18 赞", useUnmergedTree = true)
+            .onNodeWithTag("community-like-count-1", useUnmergedTree = true)
             .assertTextLayoutFits()
         capture()
     }
