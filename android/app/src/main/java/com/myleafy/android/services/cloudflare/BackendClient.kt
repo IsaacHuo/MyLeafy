@@ -50,8 +50,9 @@ class BackendClient(
     private val store: BackendSessionStore,
     private val isScopeActive: () -> Boolean = { true },
     private val http: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS)
-        .callTimeout(90, TimeUnit.SECONDS).followRedirects(false).build(),
+        .dns(com.myleafy.android.core.network.Ipv4FirstDns)
+        .connectTimeout(8, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(60, TimeUnit.SECONDS).followRedirects(false).build(),
 ) {
     val json = Json { ignoreUnknownKeys = true }
     private val base = origin.toHttpUrl().also {

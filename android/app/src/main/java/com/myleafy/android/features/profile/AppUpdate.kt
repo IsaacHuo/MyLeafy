@@ -59,7 +59,9 @@ data class UpdatePackageIdentity(val packageName: String, val versionCode: Long,
 class AppUpdateRepository(private val context: Context) {
     val json = Json { ignoreUnknownKeys = true }
     private val origin = BuildConfig.MYLEAFY_API_ORIGIN.trimEnd('/')
-    private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS)
+    private val client = OkHttpClient.Builder()
+        .dns(com.myleafy.android.core.network.Ipv4FirstDns)
+        .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS).build()
     private suspend inline fun <reified T> get(path: String): T = withContext(Dispatchers.IO) {
         client.newCall(Request.Builder().url(origin + path).build()).execute().use { response ->
