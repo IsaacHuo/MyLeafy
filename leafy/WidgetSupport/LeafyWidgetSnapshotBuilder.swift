@@ -16,10 +16,7 @@ enum LeafyWidgetSnapshotBuilder {
                 cellReminders: try modelContext.fetch(FetchDescriptor<TimetableCellReminder>()),
                 schedules: try CustomScheduleStore.loadForSync(),
                 examArrangements: isAuthenticated ? try SchoolDataCache.loadExamScheduleForEditing() : [],
-                weather: UserDefaultsCampusWeatherCache().currentTemperatureSnapshot(maxAge: 6 * 60 * 60, now: date)
-                    .map {
-                        LeafyWidgetWeatherSnapshot(celsius: $0.temperature, observedAt: $0.observedAt)
-                    },
+                weather: cachedWeatherSnapshot(),
                 isAuthenticated: isAuthenticated, date: date
             )
             Task { await WidgetSnapshotPublisher.shared.publish(archive) }
@@ -27,6 +24,11 @@ enum LeafyWidgetSnapshotBuilder {
             // A failed read must not replace the last valid widget with an empty timetable.
             logger.error("Widget snapshot read failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    static func cachedWeatherSnapshot(userDefaults: UserDefaults = .standard) -> LeafyWidgetWeatherSnapshot? {
+        UserDefaultsTimetableWeatherCache(userDefaults: userDefaults).currentWeather(maxAge: 6 * 60 * 60)
+            .map { LeafyWidgetWeatherSnapshot(celsius: $0.temperature, observedAt: $0.observedAt) }
     }
 
     static func publishNeedsLogin(date: Date = Date()) {

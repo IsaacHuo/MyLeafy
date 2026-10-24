@@ -173,6 +173,7 @@ nonisolated struct WeatherKitTimetableWeatherService: TimetableWeatherServicing 
             try Task.checkCancellation()
             guard identityKey == ActiveCampusContext.identity?.scopeKey else { throw CancellationError() }
             cache.save(snapshot)
+            NotificationCenter.default.post(name: .campusWeatherDidChange, object: nil)
             return snapshot
         } catch {
             if identityKey != ActiveCampusContext.identity?.scopeKey || Task

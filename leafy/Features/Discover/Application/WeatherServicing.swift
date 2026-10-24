@@ -152,12 +152,6 @@ nonisolated struct UserDefaultsCampusWeatherCache: CampusWeatherCaching {
             condition: cached.condition
         )
     }
-    func currentTemperatureSnapshot(maxAge: TimeInterval,
-                                    now: Date = Date()) -> (temperature: Double, observedAt: Date)? {
-        guard let cached = cachedWeather(maxAge: maxAge, now: now) else { return nil }
-        return (cached.temperature, cached.savedAt)
-    }
-
     private func cachedWeather(maxAge: TimeInterval, now: Date) -> CachedCampusWeather? {
         guard let data = userDefaults.data(forKey: key),
               let cached = try? JSONDecoder().decode(CachedCampusWeather.self, from: data),

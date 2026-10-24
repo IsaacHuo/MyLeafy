@@ -69,22 +69,6 @@ final class WeatherServicingTests: XCTestCase {
         }
     }
 
-    func testCachedTemperatureSnapshotPreservesObservationTimeAndExpires() throws {
-        let suite = "WeatherSnapshot-" + UUID().uuidString
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let cache = UserDefaultsCampusWeatherCache(userDefaults: defaults)
-        cache.save(.init(temperature: 18, condition: "晴"))
-        let initial = try XCTUnwrap(cache.currentTemperatureSnapshot(maxAge: 60))
-        let later = try XCTUnwrap(cache.currentTemperatureSnapshot(
-            maxAge: 60,
-            now: initial.observedAt.addingTimeInterval(30)
-        ))
-        XCTAssertEqual(later.observedAt, initial.observedAt)
-        XCTAssertEqual(later.temperature, 18)
-        XCTAssertNil(cache.currentTemperatureSnapshot(maxAge: 60, now: initial.observedAt.addingTimeInterval(61)))
-    }
-
     @MainActor
     func testReusedDefaultWeatherServiceWritesOnlyCurrentIdentityCache() async throws {
         let manager = ActiveCampusContext.networkManager
