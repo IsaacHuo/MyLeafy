@@ -58,8 +58,17 @@ data class TimetableUserSettings(
                         add(default.copy(period = index + 1))
                     } else {
                         val previous = last()
-                        val start = (previous.endMinutes + 5).coerceAtMost(23 * 60 + 30)
-                        val end = (start + 45).coerceAtMost(23 * 60 + 59)
+                        val remaining = target - size
+                        val start = previous.endMinutes + 1
+                        val available = (23 * 60 + 59 - start).coerceAtLeast(remaining)
+                        // 新增一节时优先沿用 45 分钟；一次补到 24 节时按剩余时间均分，
+                        // 保证自动生成的作息仍然合法，用户可再逐节微调。
+                        val duration = if (remaining == 1) {
+                            available.coerceAtMost(45)
+                        } else {
+                            ((available - (remaining - 1)) / remaining).coerceAtLeast(1)
+                        }
+                        val end = (start + duration).coerceAtMost(23 * 60 + 59)
                         add(
                             TimetablePeriodSchedule.Slot(
                                 period = index + 1,
