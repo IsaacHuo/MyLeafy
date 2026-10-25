@@ -9,8 +9,8 @@ const commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'})
 const output=resolve(destination);mkdirSync(output,{mode:0o700});const tree=join(output,'release');mkdirSync(tree);
 for(const path of ['backend/dist','backend/package.json','backend/package-lock.json','backend/migrations','backend/deploy','backend/scripts/staging-smoke.mjs','site/dist']){mkdirSync(resolve(tree,path,'..'),{recursive:true});cpSync(resolve(root,path),resolve(tree,path),{recursive:true});}
 for(const path of ['backend/scripts/ecs','backend/scripts/migration'])mkdirSync(resolve(tree,path),{recursive:true});
-for(const name of readdirSync(resolve(root,'backend/scripts/ecs')).filter(n=>n.endsWith('.mjs')))cpSync(resolve(root,'backend/scripts/ecs',name),resolve(tree,'backend/scripts/ecs',name));
-for(const name of ['snapshot.mjs','cloudflare-auth.mjs'])cpSync(resolve(root,'backend/scripts/migration',name),resolve(tree,'backend/scripts/migration',name));
+for(const name of ['sql.mjs','source-fence.mjs','snapshot.mjs','local-backup.mjs','migrate.mjs','verify-release.mjs','check-services.mjs'])cpSync(resolve(root,'backend/scripts/ecs',name),resolve(tree,'backend/scripts/ecs',name));
+for(const name of ['snapshot.mjs'])cpSync(resolve(root,'backend/scripts/migration',name),resolve(tree,'backend/scripts/migration',name));
 const files={};
 function walk(directory){for(const name of readdirSync(directory)){const path=join(directory,name);if(lstatSync(path).isDirectory())walk(path);else files[relative(tree,path)]=createHash('sha256').update(readFileSync(path)).digest('hex');}}
 walk(tree);writeFileSync(join(tree,'release-manifest.json'),JSON.stringify({version:1,commit,files},null,2));

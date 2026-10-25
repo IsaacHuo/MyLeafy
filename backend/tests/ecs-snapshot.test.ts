@@ -1,9 +1,10 @@
+import {inspectSchema} from '../scripts/ecs/sql.mjs';
 import {expect,it} from 'vitest';
 import SQLite from 'better-sqlite3';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {inspectSchema,selectRows,sha,restoreDatabase,verifyReferences} from '../scripts/ecs/snapshot.mjs';
+import {selectRows,sha,restoreDatabase,verifyReferences} from '../scripts/ecs/snapshot.mjs';
 it('restores exact int64, blobs, rowids, generated columns, triggers and FTS without source changes',()=>{
  const directory=mkdtempSync(join(tmpdir(),'leafy-snapshot-')),source=new SQLite(':memory:');
  try{

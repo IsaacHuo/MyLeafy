@@ -1,4 +1,5 @@
-import {source,quote} from './cloudflare.mjs';
+import {source} from './cloudflare.mjs';
+import {quote} from './sql.mjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 const environment=process.argv[2],remote=await source(environment);
 const schema=await remote.query("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY type,name");

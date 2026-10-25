@@ -1,10 +1,11 @@
+import {inspectSchema} from './sql.mjs';
 import SQLite from 'better-sqlite3';
 import {readFile,readdir,mkdir,writeFile,rename,rm} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {parseEnv} from 'node:util';
 import {spawnSync} from 'node:child_process';
 import {backupKey,encrypt} from '../migration/snapshot.mjs';
-import {inspectSchema,selectRows,sha,verifyReferences} from './snapshot.mjs';
+import {selectRows,sha,verifyReferences} from './snapshot.mjs';
 const [root,backupRoot,envFile,environment]=process.argv.slice(2);
 if(!root||!backupRoot||!envFile||!['staging','production'].includes(environment))throw new Error('Usage: local-backup.mjs STOPPED_DATA_DIRECTORY BACKUP_DIRECTORY ENV_FILE staging|production');
 const configuration=parseEnv(await readFile(envFile,'utf8'));

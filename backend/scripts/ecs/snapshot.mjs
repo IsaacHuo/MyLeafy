@@ -1,7 +1,7 @@
 import {removeRestoredFence} from './source-fence.mjs';
 import {createHash} from 'node:crypto';
 import SQLite from 'better-sqlite3';
-import {quote} from './cloudflare.mjs';
+import {quote,inspectSchema} from './sql.mjs';
 export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 // Integers and blobs are strings in the wire snapshot: no JSON int64 precision loss.
 export function selectRows(name,columns,withoutRowid=false){
@@ -9,11 +9,6 @@ export function selectRows(name,columns,withoutRowid=false){
  const order=withoutRowid?columns.filter(c=>c.pk).sort((a,b)=>a.pk-b.pk).map(c=>quote(c.name)).join(','):'rowid';
  if(!order)throw new Error('Snapshot requires deterministic order');
  return `SELECT json_object('rowid',${withoutRowid?'NULL':'CAST(rowid AS TEXT)'},'values',json_array(${fields.join(',')})) AS snapshot_row FROM ${quote(name)} ORDER BY ${order}`;
-}
-export function inspectSchema(schema){
- const virtual=schema.filter(s=>s.type==='table'&&/^CREATE VIRTUAL TABLE/i.test(s.sql));
- const tables=schema.filter(s=>s.type==='table'&&!virtual.some(v=>s.name===v.name||s.name.startsWith(v.name+'_')));
- return {tables,virtual,other:schema.filter(s=>s.type!=='table')};
 }
 export function restoreDatabase(snapshot,path){
  if(!snapshot.complete)throw new Error('Incomplete snapshot');

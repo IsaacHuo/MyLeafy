@@ -2,7 +2,8 @@
 import {readFile,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {source,quote} from './cloudflare.mjs';
+import {source} from './cloudflare.mjs';
+import {quote} from './sql.mjs';
 import {cloudflareToken} from '../migration/cloudflare-auth.mjs';
 const [path,confirmation]=process.argv.slice(2);
 if(!path||confirmation!=='--confirmed-no-target-writes')throw new Error('Usage: recover-source.mjs FREEZE_REPORT --confirmed-no-target-writes; stop the target first and protect any new data');

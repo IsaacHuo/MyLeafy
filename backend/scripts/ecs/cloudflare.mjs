@@ -17,4 +17,3 @@ export async function source(environment){
   }
   return {config,selected,query,request};
 }
-export const quote=name=>'"'+name.replaceAll('"','""')+'"';

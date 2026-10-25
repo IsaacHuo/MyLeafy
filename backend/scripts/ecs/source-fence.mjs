@@ -1,12 +1,11 @@
 import {createHash} from 'node:crypto';
-import {quote} from './cloudflare.mjs';
+import {quote,inspectSchema} from './sql.mjs';
 export const fenceTable='_ecs_source_freeze';
 const prefix='ecs_source_fence_';
 export function fenceSQL(schema){
  if(schema.some(item=>item.name===fenceTable||item.name.startsWith(prefix)))throw new Error('Existing source fence requires operator inspection');
  const statements=[`CREATE TABLE ${quote(fenceTable)}(id INTEGER PRIMARY KEY CHECK(id=1),frozen INTEGER NOT NULL CHECK(frozen IN(0,1)))`,`INSERT INTO ${quote(fenceTable)} VALUES(1,0)`],triggers=[];
- const virtual=schema.filter(s=>s.type==='table'&&/^CREATE VIRTUAL TABLE/i.test(s.sql));
- const tables=schema.filter(s=>s.type==='table'&&!virtual.some(v=>s.name===v.name||s.name.startsWith(v.name+'_')));
+ const {tables}=inspectSchema(schema);
  for(const table of tables)for(const action of ['INSERT','UPDATE','DELETE']){
   const name=prefix+createHash('sha256').update(table.name+':'+action).digest('hex').slice(0,24);triggers.push(name);
   statements.push(`CREATE TRIGGER ${quote(name)} BEFORE ${action} ON ${quote(table.name)} WHEN (SELECT frozen FROM ${quote(fenceTable)} WHERE id=1)=1 BEGIN SELECT RAISE(ABORT,'ecs_source_frozen'); END`);
