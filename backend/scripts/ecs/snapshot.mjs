@@ -1,3 +1,4 @@
+import {removeRestoredFence} from './source-fence.mjs';
 import {createHash} from 'node:crypto';
 import SQLite from 'better-sqlite3';
 import {quote} from './cloudflare.mjs';
@@ -37,6 +38,9 @@ export function restoreDatabase(snapshot,path){
    for(const item of schema.other.filter(s=>s.type==='trigger'))db.exec(item.sql);
   })();
   db.pragma('foreign_keys=ON');verifyDatabase(snapshot,db);
+  const sourceFreezeRemoved=removeRestoredFence(db);
+  if(db.pragma('foreign_key_check').length||db.pragma('integrity_check',{simple:true})!=='ok')throw new Error('Post-freeze restore integrity failed');
+  return {sourceFreezeRemoved};
  }finally{db.close();}
 }
 export function verifyDatabase(snapshot,db){

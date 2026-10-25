@@ -36,3 +36,19 @@ it('requires attached media and retained release bytes to match the database',()
  expect(()=>verifyReferences({...snapshot,objects:[]})).toThrow('Attached media reference');
  expect(()=>verifyReferences({...snapshot,objects:[{...snapshot.objects[0],size:8}]})).toThrow('Attached media reference');
 });
+
+it('source fence blocks late writes and restored target removes only migration fences',async()=>{
+ const {fenceSQL}=await import('../scripts/ecs/source-fence.mjs');
+ const directory=mkdtempSync(join(tmpdir(),'leafy-fence-')),source=new SQLite(':memory:');
+ try{
+  source.exec("CREATE TABLE business(id TEXT PRIMARY KEY,value TEXT);INSERT INTO business VALUES('one','kept');CREATE TABLE identity_session(id TEXT PRIMARY KEY);INSERT INTO identity_session VALUES('old');");
+  const schemaBefore=source.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'").all();
+  for(const sql of fenceSQL(schemaBefore).statements)source.exec(sql);
+  for(const sql of ["INSERT INTO business VALUES('new','late')","UPDATE business SET value='late'","DELETE FROM business","INSERT INTO identity_session VALUES('late-auth')"]){expect(()=>source.exec(sql)).toThrow('ecs_source_frozen');}
+  const schema=source.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type,name").all();
+  const tables=inspectSchema(schema).tables.map((table:any)=>{const columns=source.prepare(`PRAGMA table_xinfo("${table.name}")`).all().filter((c:any)=>c.hidden===0),rows=source.prepare(selectRows(table.name,columns)).all().map((r:any)=>JSON.parse(r.snapshot_row));return {name:table.name,columns,rows,sha256:sha(JSON.stringify(rows)),withoutRowid:false};});
+  const path=join(directory,'target.sqlite');expect(restoreDatabase({complete:true,schema,tables},path)).toEqual({sourceFreezeRemoved:true});
+  const target=new SQLite(path);try{target.exec("INSERT INTO business VALUES('new','allowed')");expect(target.prepare('SELECT count(*) n FROM business').get()).toEqual({n:2});expect(target.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='_ecs_source_freeze'").get()).toEqual({n:0});}finally{target.close();}
+  expect(()=>source.exec("UPDATE business SET value='still-frozen'")).toThrow('ecs_source_frozen');
+ }finally{source.close();rmSync(directory,{recursive:true,force:true});}
+});

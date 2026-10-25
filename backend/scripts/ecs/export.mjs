@@ -10,7 +10,10 @@ if(mode==='--quiesced'){
  if(!process.env.SOURCE_FREEZE_REPORT)throw new Error('SOURCE_FREEZE_REPORT is required');
  const report=JSON.parse(await readFile(process.env.SOURCE_FREEZE_REPORT,'utf8'));
  const deployed=(await (await remote.request(`/workers/scripts/${remote.selected.name}/deployments`)).json()).result?.deployments?.[0]?.versions;
- if(!report.complete||!report.allEntrypointsBlocked||report.environment!==environment||report.worker!==remote.selected.name||report.database!==remote.selected.d1_databases[0].database_id||deployed?.length!==1||deployed[0].percentage!==100||deployed[0].version_id!==report.freezeVersion)throw new Error('Authenticated source freeze evidence does not match active deployment');
+ if(!report.complete||!report.databaseFrozen||!report.allEntrypointsBlocked||report.environment!==environment||report.worker!==remote.selected.name||report.database!==remote.selected.d1_databases[0].database_id||deployed?.length!==1||deployed[0].percentage!==100||deployed[0].version_id!==report.freezeVersion)throw new Error('Authenticated source freeze evidence does not match active deployment');
+ const state=await remote.query('SELECT frozen FROM _ecs_source_freeze WHERE id=1');
+ const triggers=await remote.query("SELECT name FROM sqlite_schema WHERE type='trigger' AND name GLOB 'ecs_source_fence_*'");
+ if(state[0]?.frozen!==1||JSON.stringify(triggers.map(t=>t.name).sort())!==JSON.stringify(report.fenceTriggers.slice().sort()))throw new Error('Source database fence verification failed');
 }
 await mkdir(resolve(directory),{mode:0o700}); // refuses an existing/incomplete directory
 const snapshot={version:1,environment,createdAt:new Date().toISOString(),consistent:mode==='--quiesced',complete:false,schema:[],tables:[],objects:[]};

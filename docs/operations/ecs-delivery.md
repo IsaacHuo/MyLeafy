@@ -24,7 +24,7 @@ node --env-file=backend/.env.migration backend/dist/restore.mjs PRIVATE_BACKUP E
 
 restore 默认保留 `maintenance`，失败保留 `restore-failed`，不激活残缺数据。完成逐表/文件校验后，先做备份恢复演练，再由操作者接通私有验收。待应用 migration 单独执行 `node backend/scripts/ecs/migrate.mjs DATABASE_PATH`，须先停服务和备份。该工具保留 `d1_migrations` 记录，不能对已建结构重放全部历史 SQL。
 
-最终生产导出只在备案和验收均满足后执行：使用 `freeze-source.mjs` 和独立 `backend/cutover/maintenance.ts` 冻结现有 Worker 的全部入口，保存报告并确认在途任务结束，通过 `SOURCE_FREEZE_REPORT` 指定报告，以 `--quiesced` 导出，再 `--production` 恢复。不要为导出在源库删除 FTS 表。备份中原始运行配置可用同一备份密钥及 AAD `ecs-runtime-env-v1` 解密，不能把解密结果写入报告。
+最终生产导出只在备案和验收均满足后执行：使用 `freeze-source.mjs` 和独立 `backend/cutover/maintenance.ts` 冻结现有 Worker 的全部入口，保存报告并确认在途任务结束，通过 `SOURCE_FREEZE_REPORT` 指定报告，以 `--quiesced` 导出，再 `--production` 恢复。冻结工具会阻断普通表的全部写入；不完整报告不能用于最终快照。目标先核对原始快照，再删除专用冻结机制，默认仍处于 maintenance。若目标从未开放写入，先停目标，再显式执行 `recover-source.mjs FREEZE_REPORT --confirmed-no-target-writes` 恢复源冻结机制与记录的旧代码；DNS 恢复另行处理。目标已接收新写入时禁止直接执行此恢复。不要为导出在源库删除 FTS 表。备份中原始运行配置可用同一备份密钥及 AAD `ecs-runtime-env-v1` 解密，不能把解密结果写入报告。
 
 生产配置可使用 `prepare-production.py --originals PRIVATE_JSON --output NEW_ENV_FILE` 从原始 Secret 生成 0600 文件；缺失发布凭据会明确列出，不生成替代值或自动轮换。`check-services.mjs` 仅检查邮件/GitHub 可达性，不发送邮件或触发发布；实际送达与发布仍须独立验收。
 

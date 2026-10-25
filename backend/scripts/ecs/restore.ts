@@ -13,7 +13,7 @@ await mkdir(resolve(destination),{mode:0o700});
 for(const store of ['files','releases'])await mkdir(join(destination,store),{mode:0o700});
 await writeFile(join(destination,'maintenance'),'Restore is not yet accepted\n',{mode:0o600,flag:'wx'});
 try{
- restoreDatabase(snapshot,join(destination,'database.sqlite'));
+ const databaseRestore=restoreDatabase(snapshot,join(destination,'database.sqlite'));
  for(const object of snapshot.objects){
   if(!['files','releases'].includes(object.store)||object.id!==sha(`${object.store==='files'?'FILES':'RELEASES'}/${object.key}`))throw new Error('Invalid object manifest');
   const bytes=decrypt(await readFile(join(directory,object.id+'.enc')),key,'ecs-object:'+object.id);
@@ -25,6 +25,6 @@ try{
   if(object.httpEtag){const metadata=JSON.parse(await readFile(path,'utf8'));metadata.httpEtag=object.httpEtag;await writeFile(path,JSON.stringify(metadata),{mode:0o600});}
   const restored=await store.get(object.key);if(!restored||sha(Buffer.from(await restored.arrayBuffer()))!==object.sha256)throw new Error('Object readback failed');await restored.body.cancel();
  }
- await writeFile(join(destination,'restore-report.json'),JSON.stringify({sourceCreatedAt:snapshot.createdAt,environment:snapshot.environment,consistent:snapshot.consistent,verified:true,tables:snapshot.tables.length,objects:snapshot.objects.length}),{mode:0o600});
+ await writeFile(join(destination,'restore-report.json'),JSON.stringify({sourceCreatedAt:snapshot.createdAt,environment:snapshot.environment,consistent:snapshot.consistent,verified:true,sourceFreezeRemoved:databaseRestore.sourceFreezeRemoved,tables:snapshot.tables.length,objects:snapshot.objects.length}),{mode:0o600});
  console.log(JSON.stringify({verified:true,maintenance:true,tables:snapshot.tables.length,objects:snapshot.objects.length}));
 }catch(error){await writeFile(join(destination,'restore-failed'),'Do not activate incomplete restore\n',{mode:0o600});throw error;}
