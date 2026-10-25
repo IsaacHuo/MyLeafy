@@ -1,14 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { LocalD1 } from './d1-local';
+import { TestDatabase } from './sqlite-local';
 import { actor, auth, type BackendEnv } from '../src/auth';
 import { updateProfile, bootstrap, deleteAccount, requestProfileEmail, verifyProfileEmail } from '../src/identity';
 
-const databases:LocalD1[]=[];
+const databases:TestDatabase[]=[];
 afterEach(()=>{vi.unstubAllGlobals();for(const db of databases.splice(0))db.close();});
 function setup(){
-  const db=new LocalD1();databases.push(db);
+  const db=new TestDatabase();databases.push(db);
   db.sqlite.exec("UPDATE backend_control SET mode='active'; INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('bjfu','北林','北林','北林','qiangzhi');");
-  const env={DB:db.binding(),ENVIRONMENT:'staging',API_ORIGIN:'https://api.test.invalid',SITE_ORIGIN:'https://site.test.invalid',AUTH_SECRET:'test-only-random-secret-at-least-32-characters-long'} as BackendEnv;
+  const env={DB:db,ENVIRONMENT:'staging',API_ORIGIN:'https://api.test.invalid',SITE_ORIGIN:'https://site.test.invalid',AUTH_SECRET:'test-only-random-secret-at-least-32-characters-long'} as unknown as BackendEnv;
   return {db,env};
 }
 async function anonymousSession(env:BackendEnv){

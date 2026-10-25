@@ -283,6 +283,8 @@ Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 2
 
 ## 10. Cloudflare 与 Web/运营后台边界
 
+2026-10-26：后端源码开始切换为 Node 24/Hono/SQLite/本地文件，由 systemd 与 Caddy 承载；Cloudflare 现有已部署生产仍是权威，未完成备案和停写切换。新 HTTP 入口按主机分流，管理处理器仅由同域网站代理调用；实时房间为单进程实现，outbox 和 SQL 授权语义保留。权威 DNS 也将迁至阿里云，最终退出 Cloudflare。具体状态和边界见 [迁移说明](../docs/engineering/aliyun-ecs-migration.md)。
+
 - `backend/`：新版 Workers 业务、D1 migrations、数据导出转换与校验工具。
 - `supabase/`：旧生产 schema、Edge Functions 和测试，作为迁移输入及旧服务维护依据。
 - 新版业务统一走 `/v1`；后台走 Worker `AdminAPI` 私有入口，公开 HTTP 不开放管理路由。旧 `supabase/functions/` 只服务旧版。

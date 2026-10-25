@@ -1,5 +1,17 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "types": ["node"], "lib": ["ES2022", "DOM"] },
-  "include": ["scripts/**/*.ts", "tests/**/*.ts", "worker-configuration.d.ts"]
+  "compilerOptions": {
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ]
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

@@ -1,50 +1,52 @@
-import { DurableObject } from 'cloudflare:workers';
-
-type Subscription={expires:number;sessionId:string;profileId:string;campusId:string|null;scope:'feed'|'notifications'};
-
-/** Only the authenticated API obtains room bindings; clients cannot choose room IDs. */
-export class ChangeSignals extends DurableObject<Env> {
-  async fetch(request:Request):Promise<Response>{
-    const path=new URL(request.url).pathname;
-    if(path==='/connect'&&request.headers.get('upgrade')?.toLowerCase()==='websocket'){
-      const expires=Number(request.headers.get('x-session-expires'));
-      const sessionId=request.headers.get('x-session-id'),profileId=request.headers.get('x-profile-id');
-      const scope=request.headers.get('x-subscription-scope');
-      if(!Number.isFinite(expires)||expires<=Date.now()||!sessionId||!profileId||(scope!=='feed'&&scope!=='notifications'))return new Response('Invalid subscription',{status:401});
-      const pair=new WebSocketPair();this.ctx.acceptWebSocket(pair[1]);
-      pair[1].serializeAttachment({expires,sessionId,profileId,campusId:request.headers.get('x-campus-id'),scope} satisfies Subscription);
-      await this.scheduleCheck();return new Response(null,{status:101,webSocket:pair[0]});
-    }
-    if(path==='/publish'&&request.method==='POST'){
-      const event=await request.json() as {id:string};
-      if(typeof event.id!=='string'||event.id.length>100)return new Response('Invalid event',{status:400});
-      for(const socket of await this.authorizedSockets()){
-        try{socket.send(JSON.stringify({type:'changed',event_id:event.id}));}catch{socket.close(1011,'Reconnect required');}
-      }
-      return new Response(null,{status:204});
-    }
-    return new Response('Not found',{status:404});
+import { upgradeWebSocket } from '@hono/node-server';
+import type { Context } from 'hono';
+import type { WSContext } from 'hono/ws';
+import type { Actor, BackendEnv } from './auth';
+type Subscription = { socket: WSContext; who: Actor; scope: 'feed'|'notifications'; room: string };
+/** Single-process rooms. Persistent outbox remains the delivery authority. */
+export class ChangeSignals {
+  private subscriptions = new Set<Subscription>();
+  private timer: ReturnType<typeof setInterval>;
+  constructor(private env: Pick<BackendEnv,'DB'>) {
+    this.timer = setInterval(() => { void this.check().catch(()=>console.error(JSON.stringify({event:'signal_authorization_failed'}))); },60_000);
+    this.timer.unref();
   }
-  async authorizedSockets(){
-    const sockets=this.ctx.getWebSockets(),valid:WebSocket[]=[];
-    for(let start=0;start<sockets.length;start+=80){
-      const group=sockets.slice(start,start+80),subscriptions=group.map(s=>s.deserializeAttachment() as Subscription);
-      const sessions=await this.env.DB.prepare(`SELECT s.id,l.profile_id,
-        CASE WHEN c.status='active' AND c.is_community_enabled=1 AND (p.campus_id='bjfu' OR p.community_access_status='approved') THEN c.id ELSE NULL END AS campus_id
-        FROM identity_session s JOIN auth_users u ON u.id=s.userId JOIN profile_auth_links l ON l.auth_user_id=s.userId JOIN profiles p ON p.id=l.profile_id
-        LEFT JOIN campuses c ON c.id=CASE WHEN p.campus_id='bjfu' THEN 'bjfu' ELSE p.community_campus_id END
-        WHERE s.id IN(${subscriptions.map(()=>'?').join(',')}) AND s.expiresAt>? AND (u.banned_until IS NULL OR u.banned_until<=?)`)
-        .bind(...subscriptions.map(s=>s.sessionId),Date.now(),new Date().toISOString().replace('Z','000Z')).all<{id:string;profile_id:string;campus_id:string|null}>();
-      group.forEach((socket,i)=>{
-        const state=subscriptions[i],session=sessions.results.find(s=>s.id===state.sessionId);
-        if(state.expires<=Date.now()||!session||session.profile_id!==state.profileId||(state.scope==='feed'&&(!state.campusId||session.campus_id!==state.campusId)))socket.close(1008,'Subscription expired');
-        else valid.push(socket);
-      });
-    }
-    return valid;
+  subscribe(socket: WSContext, who: Actor, scope: Subscription['scope']) {
+    const subscription = {socket,who,scope,room:scope==='feed'?`campus:${who.campusId}`:`profile:${who.profileId}`};
+    this.subscriptions.add(subscription); return subscription;
   }
-  webSocketMessage(socket:WebSocket,message:string|ArrayBuffer){if(message==='ping')socket.send('pong');else socket.close(1008,'Unsupported message');}
-  webSocketClose(socket:WebSocket,code:number,reason:string){socket.close(code,reason);}
-  async scheduleCheck(){if(this.ctx.getWebSockets().length)await this.ctx.storage.setAlarm(Date.now()+60000);}
-  async alarm(){await this.authorizedSockets();await this.scheduleCheck();}
+  remove(subscription: Subscription) { this.subscriptions.delete(subscription); }
+  private async authorized(s: Subscription) {
+    const row = await this.env.DB.prepare(`SELECT l.profile_id,
+      CASE WHEN c.status='active' AND c.is_community_enabled=1 AND (p.campus_id='bjfu' OR p.community_access_status='approved') THEN c.id ELSE NULL END AS campus_id
+      FROM identity_session s JOIN auth_users u ON u.id=s.userId JOIN profile_auth_links l ON l.auth_user_id=s.userId JOIN profiles p ON p.id=l.profile_id
+      LEFT JOIN campuses c ON c.id=CASE WHEN p.campus_id='bjfu' THEN 'bjfu' ELSE p.community_campus_id END
+      WHERE s.id=? AND s.expiresAt>? AND (u.banned_until IS NULL OR u.banned_until<=?)`)
+      .bind(s.who.sessionId,Date.now(),new Date().toISOString().replace('Z','000Z')).first<{profile_id:string;campus_id:string|null}>();
+    return s.who.sessionExpires>Date.now() && row?.profile_id===s.who.profileId && (s.scope!=='feed' || !!s.who.campusId && row.campus_id===s.who.campusId);
+  }
+  async check() {
+    for(const s of this.subscriptions) {
+      let allowed=false;
+      try { allowed=!!await this.authorized(s); } catch { /* Authorization failures close sockets. */ }
+      if(!allowed) {s.socket.close(1008,'Subscription expired');this.remove(s);}
+    }
+  }
+  async publish(room:string,id:string) {
+    await this.check();
+    for(const s of this.subscriptions) if(s.room===room) {
+      try{s.socket.send(JSON.stringify({type:'changed',event_id:id}));}
+      catch{s.socket.close(1011,'Reconnect required');this.remove(s);}
+    }
+  }
+  close() {clearInterval(this.timer);for(const s of this.subscriptions)s.socket.close(1001,'Service restarting');this.subscriptions.clear();}
+}
+export function connectSignals(c:Context<{Bindings:BackendEnv;Variables:{requestId:string}}>,who:Actor,scope:'feed'|'notifications') {
+  let subscription: Subscription | undefined;
+  return upgradeWebSocket(() => ({
+    onOpen(_event,socket) { subscription=c.env.SIGNALS.subscribe(socket,who,scope);void c.env.SIGNALS.check(); },
+    onMessage(event,socket) {if(event.data==='ping')socket.send('pong');else socket.close(1008,'Unsupported message');},
+    onClose() {if(subscription)c.env.SIGNALS.remove(subscription);},
+    onError() {if(subscription)c.env.SIGNALS.remove(subscription);},
+  }))(c,async()=>{});
 }

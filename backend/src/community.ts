@@ -1,3 +1,4 @@
+import type { Database } from './runtime/types';
 import type { Actor, BackendEnv } from './auth';
 import { actorGuard, atomic, decode, guard, outbox, rows, statement, type Bind, type Row } from './db';
 import { ApiError, canonical, integer, text, uuid } from './http';
@@ -13,7 +14,7 @@ export function requireCommunity(who:Actor):string{
   if(!who.campusId)throw new ApiError(403,'community_unavailable','当前身份尚未获得校园社区访问权限。');
   return who.campusId;
 }
-export function publishingGuard(db:D1Database,who:Actor){
+export function publishingGuard(db:Database,who:Actor){
   return guard(db,`EXISTS(SELECT 1 FROM profiles p WHERE p.id=? AND p.is_profile_complete=1 AND length(trim(p.nickname))>0
     AND (p.muted_until IS NULL OR p.muted_until<=?) AND EXISTS(SELECT 1 FROM community_terms_acceptances t WHERE t.user_id=p.id AND t.terms_version=?))`,
     [who.profileId,new Date().toISOString().replace('Z','000Z'),termsVersion]);

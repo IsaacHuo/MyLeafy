@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { LocalD1 } from './d1-local';
+import { TestDatabase } from './sqlite-local';
 import type { Actor, BackendEnv } from '../src/auth';
 import { createPost, createComment, comments, notifications, feed, termsVersion } from '../src/community';
 import { actorGuard, atomic, statement } from '../src/db';
@@ -8,9 +8,9 @@ import { profileStats, activityPosts } from '../src/community-reads';
 import { announcements, announcementRead, notificationSettings, unreadNotificationCount } from '../src/notices';
 import { report, pendingPost, setPostReaction, toggleCommentLike } from '../src/interactions';
 
-const databases:LocalD1[]=[];
+const databases:TestDatabase[]=[];
 function setup(){
-  const db=new LocalD1();databases.push(db);
+  const db=new TestDatabase();databases.push(db);
   const who:Actor={authId:crypto.randomUUID(),profileId:crypto.randomUUID(),campusId:'bjfu',identityCampus:'bjfu',sessionId:crypto.randomUUID(),sessionExpires:Date.now()+3600000};
   db.sqlite.exec("UPDATE backend_control SET mode='active'; INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('bjfu','北林','北林','北林','qiangzhi');");
   const now=Date.now();
@@ -19,7 +19,7 @@ function setup(){
   db.sqlite.prepare("INSERT INTO profiles(id,campus_id,edu_id,nickname,is_profile_complete,community_campus_id,community_access_status) VALUES(?,'bjfu','123','测试',1,'bjfu','approved')").run(who.profileId);
   db.sqlite.prepare("INSERT INTO profile_auth_links(auth_user_id,profile_id,campus_id,edu_id) VALUES(?,?,'bjfu','123')").run(who.authId,who.profileId);
   db.sqlite.prepare('INSERT INTO community_terms_acceptances(user_id,terms_version) VALUES(?,?)').run(who.profileId,termsVersion);
-  return {db,who,env:{DB:db.binding()} as BackendEnv};
+  return {db,who,env:{DB:db} as unknown as BackendEnv};
 }
 afterEach(()=>{for(const db of databases.splice(0))db.close();});
 describe('community transactional authorization',()=>{

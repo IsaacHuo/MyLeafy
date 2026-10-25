@@ -1,0 +1,6 @@
+[Unit]
+Description=MyLeafy encrypted consistent backup (%i)
+[Service]
+Type=oneshot
+ExecStart=/opt/myleafy/%i/current/backend/deploy/backup.sh %i
+UMask=0077

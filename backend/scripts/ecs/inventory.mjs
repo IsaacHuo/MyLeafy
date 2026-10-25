@@ -1,0 +1,12 @@
+import {source,quote} from './cloudflare.mjs';
+import {mkdir,writeFile} from 'node:fs/promises';
+const environment=process.argv[2],remote=await source(environment);
+const schema=await remote.query("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY type,name");
+const virtual=schema.filter(s=>s.type==='table'&&/^CREATE VIRTUAL TABLE/i.test(s.sql)).map(s=>s.name);
+const tables=schema.filter(s=>s.type==='table'&&!virtual.includes(s.name)&&!virtual.some(v=>s.name.startsWith(v+'_')));
+const counts={};for(const table of tables)counts[table.name]=(await remote.query(`SELECT count(*) n FROM ${quote(table.name)}`))[0].n;
+const secrets=await (await remote.request(`/workers/scripts/${remote.selected.name}/secrets`)).json();
+const report={environment,checkedAt:new Date().toISOString(),schema,counts,virtualTables:virtual,secretNames:secrets.result?.map(s=>s.name)??[],buckets:remote.selected.r2_buckets.map(b=>b.bucket_name)};
+await mkdir('backend/.local/ecs',{recursive:true,mode:0o700});
+await writeFile(`backend/.local/ecs/inventory-${environment}.json`,JSON.stringify(report,null,2),{mode:0o600});
+console.log(JSON.stringify({environment,tables:tables.length,rows:Object.values(counts).reduce((a,b)=>a+b,0),virtualTables:virtual.length,secretNames:report.secretNames}));

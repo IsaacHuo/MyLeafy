@@ -28,6 +28,7 @@ def affected(paths):
             '.github/workflows/backend-ci.yml': ('backend',),
             '.github/workflows/site-ci.yml': ('site',),
             '.github/workflows/supabase-ci.yml': ('supabase',),
+            '.github/workflows/ecs-deploy.yml': ('backend', 'site'),
             '.github/workflows/cloudflare-staging.yml': ('backend', 'site'),
             '.github/workflows/cloudflare-production.yml': ('backend', 'site'),
             '.github/workflows/cloudflare-recovery.yml': ('backend', 'site'),

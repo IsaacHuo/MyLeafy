@@ -1,0 +1,146 @@
+name: Prepare or publish accepted ECS version
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [staging, production]
+        required: true
+      commit:
+        description: Full source SHA with successful CI result
+        type: string
+        required: true
+      staging_run:
+        description: Successful ECS staging run (production only)
+        type: string
+      accepted:
+        description: I have accepted staging and completed filing (production only)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: read
+  checks: read
+concurrency:
+  group: ecs-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  review:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_COMMIT: ${{ inputs.commit }}
+      TARGET: ${{ inputs.environment }}
+      STAGING_RUN: ${{ inputs.staging_run }}
+      ACCEPTED: ${{ inputs.accepted }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.commit }}
+      - name: Verify exact source and acceptance
+        run: |
+          [[ "$RELEASE_COMMIT" =~ ^[a-f0-9]{40}$ ]]
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+          gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT/check-runs?per_page=100" --jq '[.check_runs[] | select(.name == "CI result" and .app.slug == "github-actions")] | sort_by(.started_at) | last | .conclusion == "success"' | grep -qx true
+          if [[ "$TARGET" == production ]]; then
+            [[ "$ACCEPTED" == true && "$STAGING_RUN" =~ ^[0-9]+$ ]]
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_RUN" --jq '.path == ".github/workflows/ecs-deploy.yml" and .head_branch == "main" and .conclusion == "success"' | grep -qx true
+          fi
+      - uses: actions/download-artifact@v4
+        if: inputs.environment == 'production'
+        with:
+          name: ecs-deployment-${{ inputs.commit }}
+          path: acceptance
+          run-id: ${{ inputs.staging_run }}
+          github-token: ${{ github.token }}
+      - if: inputs.environment == 'production'
+        run: jq -e --arg sha '${{ inputs.commit }}' '.environment == "staging" and .commit == $sha and .success == true' acceptance/deployment.json
+  publish:
+    needs: review
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 45
+    env:
+      RELEASE_COMMIT: ${{ inputs.commit }}
+      TARGET: ${{ inputs.environment }}
+      ECS_INSTANCE: i-2ze251tg6q9u5s25jkq4
+      WORKBENCH_ACCESS_KEY_ID: ${{ secrets.ALIYUN_WORKBENCH_ACCESS_KEY_ID }}
+      WORKBENCH_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_WORKBENCH_ACCESS_KEY_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.1
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            site/package-lock.json
+      - name: Validate and package staging source
+        if: inputs.environment == 'staging'
+        run: |
+          npm --prefix backend ci
+          npm --prefix site ci
+          npm --prefix backend run typecheck
+          npm --prefix backend run check:contracts
+          npm --prefix backend test
+          npm --prefix backend run test:migration
+          npm --prefix backend run build
+          npm --prefix site test
+          npm --prefix site run build
+          cd site
+          npx playwright install --with-deps chromium webkit
+          npm run test:e2e
+          cd ..
+          node backend/scripts/ecs/package.mjs package-output
+      - uses: actions/download-artifact@v4
+        if: inputs.environment == 'production'
+        with:
+          name: ecs-package-${{ inputs.commit }}
+          path: package-output
+          run-id: ${{ inputs.staging_run }}
+          github-token: ${{ github.token }}
+      - name: Configure dedicated Workbench credentials
+        run: |
+          test -n "$WORKBENCH_ACCESS_KEY_ID"
+          test -n "$WORKBENCH_ACCESS_KEY_SECRET"
+          curl -fsSL https://workbench-cli.oss-cn-hangzhou.aliyuncs.com/install.sh | bash -s -- --version v1.0.4 --dir "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          python3 - <<'PY'
+          import os,json
+          from pathlib import Path
+          p=Path.home()/'.workbench';p.mkdir(mode=0o700,exist_ok=True)
+          f=p/'config.json'
+          fd=os.open(f,os.O_CREAT|os.O_WRONLY|os.O_TRUNC,0o600)
+          with os.fdopen(fd,'w') as out:json.dump({'current':'ci','profiles':{'ci':{'mode':'AK','access_key_id':os.environ['WORKBENCH_ACCESS_KEY_ID'],'access_key_secret':os.environ['WORKBENCH_ACCESS_KEY_SECRET']}}},out)
+          PY
+      - name: Deploy immutable package
+        run: |
+          archive="package-output/myleafy-${RELEASE_COMMIT}.tar.gz"
+          hash=$(cat "$archive.sha256")
+          remote="/var/tmp/myleafy-${GITHUB_RUN_ID}.tar.gz"
+          workbench exec -i "$ECS_INSTANCE" -r cn-beijing -c "test ! -e '$remote'" -o json
+          workbench upload "$archive" "$remote" -i "$ECS_INSTANCE" -r cn-beijing
+          # Bootstrap and protected per-environment configuration are owner-operated.
+          workbench exec -i "$ECS_INSTANCE" -r cn-beijing --timeout 600 -c "MYLEAFY_PRODUCTION_ACCEPTED='$RELEASE_COMMIT' bash /opt/myleafy/install-release.sh '$TARGET' '$RELEASE_COMMIT' '$remote' '$hash'" -o json
+          mkdir -p deployment-report
+          workbench download "/opt/myleafy/$TARGET/deployment.json" deployment-report/deployment.json -i "$ECS_INSTANCE" -r cn-beijing
+      - uses: actions/upload-artifact@v4
+        if: inputs.environment == 'staging'
+        with:
+          name: ecs-package-${{ inputs.commit }}
+          path: package-output/myleafy-*.tar.gz*
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ecs-deployment-${{ inputs.commit }}
+          path: deployment-report/
+          if-no-files-found: ignore
+      - name: Remove temporary credentials
+        if: always()
+        run: python3 -c 'from pathlib import Path; (Path.home()/".workbench/config.json").unlink(missing_ok=True)'

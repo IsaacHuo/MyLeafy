@@ -1,0 +1,27 @@
+# Before filing: loopback only. Use Workbench TCP forwarding / SSH forwarding.
+http://127.0.0.1:8081 {
+  bind 127.0.0.1
+  @api path /v1/* /health
+  handle @api {
+    reverse_proxy 127.0.0.1:3101 {
+      header_up Host api-staging.myleafy.space
+      header_up X-Real-IP {remote_host}
+      header_up -CF-Connecting-IP
+      header_up -X-Leafy-Client-IP
+    }
+  }
+  @dynamic path /api/* /share/*
+  handle @dynamic {
+    reverse_proxy 127.0.0.1:3101 {
+      header_up Host localhost:8081
+      header_up X-Real-IP {remote_host}
+      header_up -CF-Connecting-IP
+      header_up -X-Leafy-Client-IP
+    }
+  }
+  handle {
+    root * /opt/myleafy/staging/current/site/dist
+    try_files {path} /index.html
+    file_server
+  }
+}

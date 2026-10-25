@@ -1,12 +1,11 @@
+import type { ScheduledEvent } from './runtime/types';
 import type { BackendEnv } from './auth';
 import { atomic, guard, rows, statement } from './db';
 
 export async function deliverSignals(env:BackendEnv){
   const pending=await rows(env.DB,'SELECT id,room FROM change_outbox WHERE delivered_at IS NULL ORDER BY created_at,id LIMIT 50');
   for(const event of pending){
-    const room=env.SIGNALS.get(env.SIGNALS.idFromName(event.room as string));
-    const response=await room.fetch('https://signals.internal/publish',{method:'POST',body:JSON.stringify({id:event.id}),headers:{'Content-Type':'application/json'}});
-    if(!response.ok)throw new Error('Signal delivery failed');
+    await env.SIGNALS.publish(event.room as string, event.id as string);
     await env.DB.prepare('UPDATE change_outbox SET delivered_at=? WHERE id=? AND delivered_at IS NULL').bind(new Date().toISOString().replace('Z','000Z'),event.id).run();
   }
   return pending.length;
@@ -47,7 +46,7 @@ export async function cleanMedia(env:BackendEnv){
   if(failures)throw new Error('One or more file deletions failed; durable jobs retained');
 }
 
-export async function scheduled(event:ScheduledController,env:BackendEnv){
+export async function scheduled(event:ScheduledEvent,env:BackendEnv){
   const state=await env.DB.prepare('SELECT mode FROM backend_control WHERE id=1').first<{mode:string}>();
   if(state?.mode!=='active')return;
   const jobs:Record<string,()=>Promise<unknown>>={

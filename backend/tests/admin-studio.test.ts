@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 vi.mock('../src/signals', () => ({ ChangeSignals: class {} }));
 vi.mock('../src/admin-entrypoint', () => ({ AdminAPI: class {} }));
-import { LocalD1 } from "./d1-local";
+import { TestDatabase } from "./sqlite-local";
 import type { Actor, BackendEnv } from "../src/auth";
 import type { AdminContext } from "../src/admin-auth";
 import { dateBoundary, utc } from "../src/admin-dates";
@@ -15,10 +15,10 @@ import {
 import { deleteRating } from "../src/admin-operations";
 import { overview } from "../src/admin-overview";
 import { app } from "../src/index";
-const databases: LocalD1[] = [];
+const databases: TestDatabase[] = [];
 afterEach(() => databases.splice(0).forEach((db) => db.close()));
 function fixture() {
-  const db = new LocalD1();
+  const db = new TestDatabase();
   databases.push(db);
   const now = Date.now(),
     who: Actor = {
@@ -76,7 +76,7 @@ function fixture() {
   return {
     db,
     who,
-    env: { DB: db.binding(), ENVIRONMENT: "staging" } as BackendEnv,
+    env: { DB: db, ENVIRONMENT: "staging" } as unknown as BackendEnv,
     context,
   };
 }

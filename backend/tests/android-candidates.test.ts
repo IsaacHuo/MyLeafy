@@ -1,19 +1,19 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {LocalD1} from './d1-local';
+import {TestDatabase} from './sqlite-local';
 import type {BackendEnv} from '../src/auth';
 import type {AdminContext} from '../src/admin-auth';
 import {registerAndroidCandidate,requestAndroidPublication,claimAndroidPublication,reconcileAndroidPublications,downloadAndroidCandidate} from '../src/android-candidates';
 import {latestAndroidRelease,releaseMetadata} from '../src/android-releases';
 
-const databases:LocalD1[]=[];
+const databases:TestDatabase[]=[];
 afterEach(()=>{vi.unstubAllGlobals();for(const db of databases.splice(0))db.close();});
 function fixture(){
-  const db=new LocalD1();databases.push(db);
+  const db=new TestDatabase();databases.push(db);
   const now=new Date().toISOString(),admin='release-admin',session='d'.repeat(64);
   db.sqlite.prepare('INSERT INTO admin_accounts(id,username,password_hash,display_name) VALUES(?,?,?,?)').run(admin,admin,'test-only','测试管理员');
   db.sqlite.prepare('INSERT INTO admin_sessions(token_hash,admin_id,expires_at) VALUES(?,?,?)').run(session,admin,'2099-01-01T00:00:00.000Z');
   const context:AdminContext={id:admin,role:'super_admin',tokenHash:session,requestId:'test-request',ip:'192.0.2.1',userAgent:null,expiresAt:'2099-01-01T00:00:00.000Z'};
-  const env={DB:db.binding(),ENVIRONMENT:'staging',API_ORIGIN:'https://api-staging.myleafy.space',GITHUB_RELEASE_TOKEN:'test-only-github',RELEASE_PUBLISH_TOKEN:'test-only-publisher-at-least-32-characters',ANDROID_SIGNING_CERTIFICATE_SHA256:'c'.repeat(64)} as BackendEnv;
+  const env={DB:db,ENVIRONMENT:'staging',API_ORIGIN:'https://api-staging.myleafy.space',GITHUB_RELEASE_TOKEN:'test-only-github',RELEASE_PUBLISH_TOKEN:'test-only-publisher-at-least-32-characters',ANDROID_SIGNING_CERTIFICATE_SHA256:'c'.repeat(64)} as unknown as BackendEnv;
   const body={packageName:'com.myleafy.android',channel:'official',versionCode:6,versionName:'1.2.2',minSdk:29,releaseNotes:'候选测试',commit:'a'.repeat(40),artifactKey:'android/official/6/MyLeafy-Android-1.2.2.apk',sizeBytes:7,sha256:'b'.repeat(64),certificateSha256:'c'.repeat(64),githubReleaseUrl:'https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.2.2',githubReleaseId:1,githubAssetId:2,preparationRunId:3};
   const request=new Request(env.API_ORIGIN,{headers:{Authorization:`Bearer ${env.RELEASE_PUBLISH_TOKEN}`}});
   const draft={draft:true,tag_name:'android-candidate-6',target_commitish:body.commit,assets:[{id:2,name:'MyLeafy-Android-1.2.2.apk',size:7}]};

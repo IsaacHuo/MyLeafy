@@ -1,4 +1,4 @@
-name: Cloudflare backend CI
+name: Backend CI
 
 on:
   workflow_call:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 25.6.1
+          node-version: 24.22.1
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
@@ -36,4 +36,4 @@ jobs:
       - if: inputs.full
         run: python -m unittest discover -s scripts -p 'test_*.py'
       - if: inputs.full
-        run: npx wrangler deploy --env staging --dry-run
+        run: npm run build

@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from 'vitest';
 import { hash } from 'bcryptjs';
-import { LocalD1 } from './d1-local';
+import { TestDatabase } from './sqlite-local';
 import type { BackendEnv } from '../src/auth';
 import { adminGuard, adminLogin, adminLogout, adminMe, authenticateAdmin } from '../src/admin-auth';
 import { atomic, statement, type Row } from '../src/db';
@@ -11,13 +11,13 @@ import { overview } from '../src/admin-overview';
 import { announcement, deleteRating, pinPost, resolveModerationReport, revokeAdminSession } from '../src/admin-operations';
 import { moderate } from '../src/admin-write';
 
-const databases:LocalD1[]=[];
+const databases:TestDatabase[]=[];
 afterEach(()=>{for(const db of databases.splice(0))db.close();});
 async function fixture(role='super_admin'){
-  const db=new LocalD1();databases.push(db);db.sqlite.exec("UPDATE backend_control SET mode='active'");
+  const db=new TestDatabase();databases.push(db);db.sqlite.exec("UPDATE backend_control SET mode='active'");
   const id=crypto.randomUUID();
   db.sqlite.prepare('INSERT INTO admin_accounts(id,username,password_hash,display_name,role) VALUES(?,?,?,?,?)').run(id,'test-admin',await hash('test-password-only',4),'测试管理员',role);
-  const env={DB:db.binding()} as BackendEnv;
+  const env={DB:db} as unknown as BackendEnv;
   const login=(password='test-password-only')=>new Request('https://admin.internal/login',{method:'POST',headers:{'Content-Type':'application/json','x-leafy-client-ip':'192.0.2.1'},body:JSON.stringify({username:'test-admin',password})});
   return {db,env,id,login};
 }

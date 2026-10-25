@@ -1,17 +1,16 @@
 import {afterEach,expect,it,vi} from 'vitest';
 vi.mock('../src/signals',()=>({ChangeSignals:class {}}));
-vi.mock('../src/admin-entrypoint',()=>({AdminAPI:class {}}));
-import {LocalD1} from './d1-local';
+import {TestDatabase} from './sqlite-local';
 import type {BackendEnv} from '../src/auth';
 import {app} from '../src/index';
 import {publishAndroidRelease,getAndroidRelease,releaseMetadata,uploadReleaseArtifact} from '../src/android-releases';
 
-const databases:LocalD1[]=[];
+const databases:TestDatabase[]=[];
 afterEach(()=>{vi.unstubAllGlobals();for(const db of databases.splice(0))db.close();});
 function setup(){
-  const db=new LocalD1();databases.push(db);
+  const db=new TestDatabase();databases.push(db);
   const objects=new Map<string,{size:number;customMetadata:{sha256:string}}>();
-  const env={DB:db.binding(),ENVIRONMENT:'staging',API_ORIGIN:'https://api-staging.myleafy.space',SITE_ORIGIN:'https://site.test.invalid',RELEASE_PUBLISH_TOKEN:'test-only-publish-secret-at-least-32-characters',RELEASES:{
+  const env={DB:db,ENVIRONMENT:'staging',API_ORIGIN:'https://api-staging.myleafy.space',SITE_ORIGIN:'https://site.test.invalid',RELEASE_PUBLISH_TOKEN:'test-only-publish-secret-at-least-32-characters',RELEASES:{
     head:async(key:string)=>objects.get(key)??null,
     put:async(key:string,_body:unknown,options:any)=>{if(objects.has(key))return null;const object={size:7,customMetadata:options.customMetadata};objects.set(key,object);return object;},
   }} as unknown as BackendEnv;
@@ -35,7 +34,7 @@ it('identical retries are idempotent; metadata changes and lower versions cannot
   const {env,body,request,db}=setup();await publishAndroidRelease(env,request(),body);await publishAndroidRelease(env,request(),body);
   expect(db.sqlite.prepare('SELECT count(*) n FROM release_audit').get()!.n).toBe(1);
   await expect(publishAndroidRelease(env,request(),{...body,releaseNotes:'different'})).rejects.toMatchObject({status:409});
-  env.RELEASES.head=async()=>({size:7,customMetadata:{sha256:body.sha256}} as unknown as R2Object);
+  env.RELEASES.head=async()=>({size:7,customMetadata:{sha256:body.sha256}} as unknown as import('../src/runtime/types').ObjectMetadata);
   await expect(publishAndroidRelease(env,request(),{...body,versionCode:3,artifactKey:'android/official/3/MyLeafy-Android-1.2.0.apk'})).rejects.toMatchObject({status:409});
   expect(db.sqlite.prepare('SELECT count(*) n FROM android_releases').get()!.n).toBe(1);
 });

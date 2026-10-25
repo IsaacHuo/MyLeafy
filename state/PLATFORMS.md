@@ -47,3 +47,7 @@
 | 发布前人工验收 | 真实学校会话、真机 UI/系统日历、iCloud 生产与双设备；[iOS 发行锚点 #38](https://github.com/IsaacHuo/MyLeafy/issues/38) 待补 | 正式包覆盖升级及候选验收见 [#37](https://github.com/IsaacHuo/MyLeafy/issues/37)；实际系统通知/后台共享与媒体仍需独立核验 |
 
 本轮工具与流程追踪于 [#35](https://github.com/IsaacHuo/MyLeafy/issues/35)，不把本轮验证扩展成生产发布结论。候选、正式版与本次源码分别管理。
+
+## 阿里云后端迁移（2026-10-26，进行中）
+
+新版后端源码适配 ECS，双端 `/v1`、媒体签名和 WebSocket 契约保持；已部署 Cloudflare 生产仍提供服务。网站/www/API/下载及 DNS 的正式迁移须待备案、演练和所有者验收；本轮没有重新构建或发行移动端。旧 Supabase 继续服务旧客户端。静态/本地测试与私有部署证据不替代真机或正式切换。

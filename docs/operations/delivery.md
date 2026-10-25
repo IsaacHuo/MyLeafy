@@ -1,5 +1,7 @@
 # MyLeafy 交付与发布
 
+> 2026-10-26：ECS 迁移进行中，新源码禁止按旧 Cloudflare 流程部署；当前已部署生产继续运行。新增流程见 [ECS 交付](ecs-delivery.md)，正式切换及备案仍待验收。
+
 主线通过基础检查后不会自动准备环境或候选；手动准备测试环境与私有 Android 候选。正式发布入口各自独立：Android 在 admin，iOS 在 App Store Connect，Cloudflare 在 GitHub Actions。两端版本号独立。
 
 ## 工作流与首次配置

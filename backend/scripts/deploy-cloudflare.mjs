@@ -1,8 +1,10 @@
 import {execFileSync} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
 import {resolve} from 'node:path';
 import assert from 'node:assert/strict';
 import {deploymentTarget,currentDeployment,platform,verifyWorkerDomain,waitForDeploymentJSON} from './deployment-platform.mjs';
+
+if(existsSync(new URL('../src/node.ts',import.meta.url)))throw new Error('This source targets ECS. Cloudflare source deployment is retired; use the recorded pre-migration commit for source recovery.');
 
 const environment=process.argv[2],sha=process.env.RELEASE_COMMIT,project=process.env.CLOUDFLARE_PAGES_PROJECT;
 assert(['staging','production'].includes(environment)&&/^[a-f0-9]{40}$/.test(sha??'')&&/^[a-z0-9-]+$/.test(project??''),'Explicit environment, commit and Pages project are required');

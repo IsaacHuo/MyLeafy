@@ -1,3 +1,4 @@
+import type { SQLStatement } from './runtime/types';
 import { calendarRecords } from './admin-calendar';
 import { hash } from 'bcryptjs';
 import type { BackendEnv } from './auth';
@@ -25,7 +26,7 @@ export function booleanValue(value:unknown,fallback=false){
   if(value==null)return fallback;
   if(typeof value!=='boolean')throw new ApiError(400,'bad_request','布尔字段无效。');return value;
 }
-export async function commitAdmin(env:BackendEnv,context:AdminContext,action:string,table:string,id:string|null,operations:D1PreparedStatement[],role:AdminRole='operator'){
+export async function commitAdmin(env:BackendEnv,context:AdminContext,action:string,table:string,id:string|null,operations:SQLStatement[],role:AdminRole='operator'){
   const result=await atomic(env.DB,[adminGuard(env,context,role),...operations,audit(env,context,action,table,id)]);
   return result.flatMap(r=>r.results);
 }
@@ -118,7 +119,7 @@ export async function upsertRuntime(env:BackendEnv,context:AdminContext,params:R
     payload.graduate_timetable_term_code=text(params.graduateTimetableTermCode??params.graduate_timetable_term_code,100);payload.calendar_events=calendarRecords(params.calendarEvents??params.calendar_events??[],'semester');
   }
   const encoded=encode(table,payload),keys=Object.keys(encoded),natural=calendar?'year=?':'campus_id=? AND semester_id=?',naturalValues:Bind[]=calendar?[payload.year as number]:[payload.campus_id as string,payload.semester_id as string];
-  const operations:D1PreparedStatement[]=[];
+  const operations:SQLStatement[]=[];
   if(isActive)operations.push(statement(env.DB,`UPDATE ${table} SET is_active=0 WHERE is_active=1${calendar?'':' AND campus_id=?'}`,calendar?[]:[payload.campus_id as string]));
   operations.push(statement(env.DB,`INSERT INTO ${table}(id,created_by,${keys.map(k=>`"${k}"`).join(',')}) VALUES(coalesce(?,(SELECT id FROM ${table} WHERE ${natural}),?),?,${keys.map(()=>'?').join(',')}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k=>`"${k}"=excluded."${k}"`).join(',')} RETURNING *`,[id,...naturalValues,crypto.randomUUID(),context.id,...keys.map(k=>encoded[k] as Bind)]));
   const result=await commitAdmin(env,context,calendar?'upsertNationalCalendarRuntimeConfig':'upsertSemesterRuntimeConfig',table,id,operations);return decode(table,result[0]);
@@ -136,7 +137,7 @@ export async function updateAdminAccount(env:BackendEnv,context:AdminContext,act
     if(password.length<8||new TextEncoder().encode(password).length>72)throw new ApiError(400,'bad_request','密码至少 8 个字符且不超过 72 字节。');
     payload.password_hash=await hash(password,12);
   }
-  const operations:D1PreparedStatement[]=[];
+  const operations:SQLStatement[]=[];
   if(creating){payload.id=id;payload.created_by=context.id;operations.push(insertStatement(env,'admin_accounts',payload));}
   else{
     operations.push(guard(env.DB,'EXISTS(SELECT 1 FROM admin_accounts WHERE id=?)',[id]));

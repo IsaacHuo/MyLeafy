@@ -4,33 +4,41 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --env staging",
+    "dev": "tsx watch src/node.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tools.json",
     "test:migration": "node --test tests/migration.test.mjs",
     "test": "vitest run",
     "inventory": "tsx scripts/inventory.ts",
     "schema:replay": "tsx scripts/replay-source.ts",
     "schema:convert": "tsx scripts/convert-schema.ts",
-    "deploy:staging": "wrangler deploy --env staging",
-    "types": "wrangler types --env staging",
-    "check:contracts": "tsx scripts/check-client-contracts.ts"
+    "check:contracts": "tsx scripts/check-client-contracts.ts",
+    "build": "esbuild src/node.ts --bundle --platform=node --format=esm --packages=external --target=node24 --outfile=dist/server.mjs && esbuild scripts/ecs/restore.ts --bundle --platform=node --format=esm --packages=external --target=node24 --outfile=dist/restore.mjs",
+    "start": "node dist/server.mjs"
   },
   "dependencies": {
+    "@hono/node-server": "2.1.5",
     "@js-temporal/polyfill": "^0.5.1",
     "bcryptjs": "3.0.3",
     "better-auth": "1.7.2",
-    "hono": "4.13.7"
+    "better-sqlite3": "12.11.1",
+    "hono": "4.13.7",
+    "node-cron": "4.6.0",
+    "ws": "8.22.0"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.22.0",
-    "@cloudflare/workers-types": "5.20260905.1",
+    "@types/better-sqlite3": "9.6.0",
     "@types/node": "26.4.1",
     "@types/pg": "8.23.1",
+    "@types/ws": "8.18.2",
     "embedded-postgres": "17.6.0-beta.15",
+    "esbuild": "0.28.2",
     "pg": "8.23.0",
     "tsx": "4.23.13",
     "typescript": "7.0.2",
     "vitest": "4.1.10",
     "wrangler": "4.110.0"
+  },
+  "engines": {
+    "node": ">=24.15.0 <25"
   }
 }

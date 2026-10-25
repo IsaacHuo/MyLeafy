@@ -1,14 +1,14 @@
 import { afterEach, expect, it } from 'vitest';
-import { LocalD1 } from './d1-local';
+import { TestDatabase } from './sqlite-local';
 import type { Actor, BackendEnv } from '../src/auth';
 import { createPost, termsVersion } from '../src/community';
 import { attach, attachmentDownload, readFile, upload, validateAttachment, validateImages, setProfileImage } from '../src/media';
 import { pendingPost } from '../src/interactions';
 
-const databases:LocalD1[]=[];
+const databases:TestDatabase[]=[];
 afterEach(()=>{for(const db of databases.splice(0))db.close();});
 function setup(){
-  const db=new LocalD1();databases.push(db);
+  const db=new TestDatabase();databases.push(db);
   const now=Date.now(),who:Actor={authId:crypto.randomUUID(),profileId:crypto.randomUUID(),campusId:'bjfu',identityCampus:'bjfu',sessionId:crypto.randomUUID(),sessionExpires:now+3600000};
   db.sqlite.exec("UPDATE backend_control SET mode='active'; INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('bjfu','北林','北林','北林','qiangzhi');");
   db.sqlite.prepare('INSERT INTO identity_user(id,name,email,emailVerified,createdAt,updatedAt,isAnonymous) VALUES(?,?,?,0,?,?,1)').run(who.authId,'test',`${who.authId}@anonymous.invalid`,now,now);
@@ -21,7 +21,7 @@ function setup(){
     async put(key:string,bytes:Uint8Array,options:any){if(objects.has(key))return null;const data=bytes.slice();const object={size:data.length,customMetadata:options.customMetadata,httpEtag:'"test-etag"',arrayBuffer:async()=>data.buffer,body:new ReadableStream({start(c){c.enqueue(data);c.close();}})};objects.set(key,object);return object;},
     async get(key:string){return objects.get(key)??null;},async head(key:string){return objects.get(key)??null;},async delete(key:string){objects.delete(key);},
   };
-  return {db,who,env:{DB:db.binding(),FILES:files} as unknown as BackendEnv};
+  return {db,who,env:{DB:db,FILES:files} as unknown as BackendEnv};
 }
 const pdf='%PDF-1.7\nbody\n%%EOF';
 it('uploads immutable files, consumes a receipt once, and publishes only the complete attachment set',async()=>{

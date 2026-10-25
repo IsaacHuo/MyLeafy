@@ -1,12 +1,20 @@
+import type { SqliteDatabase } from './runtime/database';
+import type { ObjectStore } from './runtime/types';
+import type { ChangeSignals } from './signals';
 import { betterAuth } from 'better-auth';
 import { authSchema } from './auth-schema';
 import { ApiError } from './http';
 
 export type Secrets = { AUTH_SECRET?:string; EMAIL_API_KEY?:string; EMAIL_FROM?:string; TEST_EMAIL_RECIPIENT?:string; MEDIA_SIGNING_SECRET?:string; RELEASE_PUBLISH_TOKEN?:string; GITHUB_RELEASE_TOKEN?:string; ANDROID_SIGNING_CERTIFICATE_SHA256?:string };
-export type BackendEnv=Omit<Env,'ENVIRONMENT'|'API_ORIGIN'|'SITE_ORIGIN'> & Secrets & {
+export type BackendEnv=Secrets & {
+  DB: SqliteDatabase; FILES: ObjectStore; RELEASES: ObjectStore; SIGNALS: ChangeSignals;
   ENVIRONMENT:'staging'|'production'; API_ORIGIN:string; SITE_ORIGIN:string; DEPLOY_COMMIT?:string;
 };
+const instances=new WeakMap<SqliteDatabase,ReturnType<typeof createAuth>>();
 export function auth(env:BackendEnv){
+  let instance=instances.get(env.DB);if(!instance){instance=createAuth(env);instances.set(env.DB,instance);}return instance;
+}
+function createAuth(env:BackendEnv){
   if(!env.AUTH_SECRET||env.AUTH_SECRET.length<32)throw new ApiError(503,'auth_unavailable','Authentication is not configured');
   return betterAuth({
     ...authSchema(async(email,otp,type)=>{
@@ -15,8 +23,8 @@ export function auth(env:BackendEnv){
       const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env.EMAIL_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:env.EMAIL_FROM,to:[email],subject:type==='change-email'?'MyLeafy 绑定邮箱验证码':'MyLeafy 验证码',text:`你的 MyLeafy 验证码是 ${otp}。有效期 60 分钟。请勿向他人提供验证码。`}),signal:AbortSignal.timeout(15000)});
       if(!response.ok)throw new ApiError(502,'email_delivery_failed','Email delivery failed',true);
     }),
-    database:env.DB,secret:env.AUTH_SECRET,baseURL:env.API_ORIGIN,trustedOrigins:[env.SITE_ORIGIN,env.API_ORIGIN,'leafy://'],
-    advanced:{database:{generateId:'uuid'},ipAddress:{ipAddressHeaders:['cf-connecting-ip']}},
+    database:env.DB.authNative,secret:env.AUTH_SECRET,baseURL:env.API_ORIGIN,trustedOrigins:[env.SITE_ORIGIN,env.API_ORIGIN,'leafy://'],
+    advanced:{database:{generateId:'uuid'},ipAddress:{ipAddressHeaders:['x-leafy-client-ip']}},
   });
 }
 export type Actor={authId:string;profileId:string;campusId:string|null;identityCampus:string;sessionId:string;sessionExpires:number};

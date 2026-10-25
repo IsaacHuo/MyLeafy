@@ -1,3 +1,4 @@
+import type { SQLStatement } from './runtime/types';
 import { auth, actor, type BackendEnv } from './auth';
 import { actorGuard, atomic, decode, guard, rows, sessionGuard, statement, type Bind } from './db';
 import { ApiError, readJSON, text } from './http';
@@ -62,7 +63,7 @@ export async function updateProfile(env:BackendEnv,request:Request){
     return body[key]===null&&key!=='nickname'?null:text(body[key],fields[key],key==='nickname');
   });
   const now=new Date().toISOString().replace('Z','000Z');
-  const mediaOperations:D1PreparedStatement[]=[];
+  const mediaOperations:SQLStatement[]=[];
   for(const kind of ['avatar','cover'] as const)if(`${kind}_path`in body)mediaOperations.push(...await profileImageOperations(env,who,kind,body[`${kind}_path`]));
   const result=await atomic(env.DB,[
     sessionGuard(env.DB,who.authId,who.sessionId),

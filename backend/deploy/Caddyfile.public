@@ -1,0 +1,44 @@
+# Activate only after filing and owner acceptance. Never an automatic bootstrap step.
+(api_proxy) {
+  reverse_proxy 127.0.0.1:{args[0]} {
+    header_up X-Real-IP {remote_host}
+    header_up -CF-Connecting-IP
+    header_up -X-Leafy-Client-IP
+  }
+}
+api.myleafy.space, downloads.myleafy.space {
+  import api_proxy 3100
+}
+api-staging.myleafy.space, downloads-staging.myleafy.space {
+  import api_proxy 3101
+}
+myleafy.space {
+  @dynamic path /api/* /share/*
+  handle @dynamic {
+    import api_proxy 3100
+  }
+  handle {
+    root * /opt/myleafy/production/current/site/dist
+    @release path /release.json
+    header @release Cache-Control "no-store"
+    try_files {path} /index.html
+    file_server
+  }
+}
+staging.myleafy.space {
+  @dynamic path /api/* /share/*
+  handle @dynamic {
+    import api_proxy 3101
+  }
+  handle {
+    root * /opt/myleafy/staging/current/site/dist
+    @release path /release.json
+    header @release Cache-Control "no-store"
+    try_files {path} /index.html
+    file_server
+  }
+}
+
+www.myleafy.space {
+  redir https://myleafy.space{uri} permanent
+}

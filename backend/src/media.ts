@@ -157,7 +157,7 @@ export async function readFile(env:BackendEnv,who:Actor,bucket:string,path:strin
   const object=await env.FILES.get(key,{range:request.headers});if(!object)throw new ApiError(404,'not_found','文件不存在。');
   const headers=new Headers({'Content-Type':accessible.content_type as string,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','ETag':object.httpEtag,'Accept-Ranges':'bytes'});
   if(bucket===attachmentBucket)headers.set('Content-Disposition','attachment');
-  if(request.headers.get('if-none-match')===object.httpEtag)return new Response(null,{status:304,headers});
+  if(request.headers.get('if-none-match')===object.httpEtag){await object.body.cancel();return new Response(null,{status:304,headers});}
   let status=200;
   if(object.range&&'offset' in object.range){
     const start=object.range.offset??0,length=object.range.length??object.size-start;

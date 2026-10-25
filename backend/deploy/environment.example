@@ -1,0 +1,15 @@
+ENVIRONMENT=staging
+API_ORIGIN=https://api-staging.myleafy.space
+SITE_ORIGIN=https://staging.myleafy.space
+DATA_DIRECTORY=/var/lib/myleafy/staging
+PORT=3101
+DEPLOY_COMMIT=REPLACE_WITH_FULL_SOURCE_SHA
+# Populate locally from protected originals; never commit live values.
+AUTH_SECRET=
+MEDIA_SIGNING_SECRET=
+EMAIL_API_KEY=
+EMAIL_FROM=
+TEST_EMAIL_RECIPIENT=
+RELEASE_PUBLISH_TOKEN=
+GITHUB_RELEASE_TOKEN=
+ANDROID_SIGNING_CERTIFICATE_SHA256=

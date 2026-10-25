@@ -22,8 +22,8 @@ import { sharePreview } from './share-preview';
 import { latestAndroidRelease, getAndroidRelease, publishAndroidRelease, uploadReleaseArtifact } from './android-releases';
 import {registerAndroidCandidate,claimAndroidPublication,failAndroidPublication} from './android-candidates';
 import { currentMembership, requestMembership, runtimeConfiguration, searchCampuses, selectCampus } from './campus';
-export { ChangeSignals } from './signals';
-export { AdminAPI } from './admin-entrypoint';
+import { connectSignals } from './signals';
+import { defer } from './runtime/background';
 
 export const app=new Hono<{Bindings:BackendEnv;Variables:{requestId:string}}>();
 app.use('*',async(c,next)=>{
@@ -58,7 +58,7 @@ app.use('/v1/*',async(c,next)=>{
   if(!state||state.mode==='importing')throw new ApiError(503,'maintenance','服务维护中，请稍后重试。',true);
   if(!['GET','HEAD','OPTIONS'].includes(c.req.method))await requireWritable(c.env.DB);
   await next();
-  if(!['GET','HEAD','OPTIONS'].includes(c.req.method)&&c.res.ok)c.executionCtx.waitUntil(deliverSignals(c.env).catch(()=>console.error(JSON.stringify({event:'signal_delivery_pending',request_id:c.get('requestId')}))));
+  if(!['GET','HEAD','OPTIONS'].includes(c.req.method)&&c.res.ok)defer(deliverSignals(c.env).catch(()=>console.error(JSON.stringify({event:'signal_delivery_pending',request_id:c.get('requestId')}))));
 });
 app.on(['GET','POST'],'/v1/auth/*',async c=>{
   await requireWritable(c.env.DB);
@@ -67,7 +67,7 @@ app.on(['GET','POST'],'/v1/auth/*',async c=>{
 app.post('/v1/profile/bootstrap',async c=>c.json(await bootstrap(c.env,c.req.raw)));
 app.delete('/v1/account',async c=>{
   const result=await deleteAccount(c.env,c.req.raw);
-  c.executionCtx.waitUntil(cleanMedia(c.env).catch(()=>console.error(JSON.stringify({event:'account_file_deletion_pending',request_id:c.get('requestId')}))));
+  defer(cleanMedia(c.env).catch(()=>console.error(JSON.stringify({event:'account_file_deletion_pending',request_id:c.get('requestId')}))));
   return c.json(result);
 });
 app.get('/v1/runtime/:kind',async c=>{
@@ -159,8 +159,7 @@ app.get('/v1/events/:scope',async c=>{
   if(scope!=='feed'&&scope!=='notifications')throw new ApiError(404,'not_found','订阅不存在。');
   if(scope==='feed'&&!who.campusId)throw new ApiError(403,'forbidden','当前身份不能订阅校园内容。');
   if(c.req.header('upgrade')?.toLowerCase()!=='websocket')throw new ApiError(426,'upgrade_required','需要 WebSocket 连接。');
-  const room=scope==='feed'?`campus:${who.campusId}`:`profile:${who.profileId}`;
-  return c.env.SIGNALS.get(c.env.SIGNALS.idFromName(room)).fetch('https://signals.internal/connect',{headers:{Upgrade:'websocket','x-session-expires':String(who.sessionExpires),'x-session-id':who.sessionId,'x-profile-id':who.profileId,'x-campus-id':who.campusId??'','x-subscription-scope':scope}});
+  return connectSignals(c,who,scope);
 });
 app.notFound(c=>c.json({error:'API route not found',errorEnvelope:{code:'not_found',message:'API route not found',retryable:false},request_id:c.get('requestId')},404));
 app.onError((error,c)=>{
