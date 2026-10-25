@@ -107,6 +107,9 @@ class AppContainer(context: Context) {
     suspend fun restoreIdentity() = identityMutex.withLock {
         if (identityRestored) return@withLock
         val settings = settingsStore.settings.first()
+        // 后台接收器 / Worker 不经过 Compose；在这里应用课表时间设置，
+        // 避免冷启动进程用默认作息和开学日期排期课前提醒或日报。
+        com.myleafy.android.features.timetable.domain.SemesterConfig.applyUserSettings(settings.timetableSettings)
         com.myleafy.android.core.campus.CampusDescriptor.forCampus(CampusID(settings.campusId))
         if (settings.campusId == CampusID.guest.rawValue) {
             activeAppScopeStore.activateGuest()
