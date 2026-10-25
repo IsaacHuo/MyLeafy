@@ -41,6 +41,7 @@ jobs:
           ref: ${{ inputs.commit }}
       - name: Verify exact source and acceptance
         run: |
+          [[ "$TARGET" == staging || "$TARGET" == production ]]
           [[ "$RELEASE_COMMIT" =~ ^[a-f0-9]{40}$ ]]
           git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
           gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT/check-runs?per_page=100" --jq '[.check_runs[] | select(.name == "CI result" and .app.slug == "github-actions")] | sort_by(.started_at) | last | .conclusion == "success"' | grep -qx true
@@ -66,8 +67,6 @@ jobs:
       RELEASE_COMMIT: ${{ inputs.commit }}
       TARGET: ${{ inputs.environment }}
       ECS_INSTANCE: i-2ze251tg6q9u5s25jkq4
-      WORKBENCH_ACCESS_KEY_ID: ${{ secrets.ALIYUN_WORKBENCH_ACCESS_KEY_ID }}
-      WORKBENCH_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_WORKBENCH_ACCESS_KEY_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,6 +105,9 @@ jobs:
           run-id: ${{ inputs.staging_run }}
           github-token: ${{ github.token }}
       - name: Configure dedicated Workbench credentials
+        env:
+          WORKBENCH_ACCESS_KEY_ID: ${{ secrets.ALIYUN_WORKBENCH_ACCESS_KEY_ID }}
+          WORKBENCH_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_WORKBENCH_ACCESS_KEY_SECRET }}
         run: |
           test -n "$WORKBENCH_ACCESS_KEY_ID"
           test -n "$WORKBENCH_ACCESS_KEY_SECRET"
@@ -128,6 +130,9 @@ jobs:
           workbench upload "$archive" "$remote" -i "$ECS_INSTANCE" -r cn-beijing
           # Bootstrap and protected per-environment configuration are owner-operated.
           workbench exec -i "$ECS_INSTANCE" -r cn-beijing --timeout 600 -c "MYLEAFY_PRODUCTION_ACCEPTED='$RELEASE_COMMIT' bash /opt/myleafy/install-release.sh '$TARGET' '$RELEASE_COMMIT' '$remote' '$hash'" -o json
+          if [[ "$TARGET" == staging ]]; then
+            workbench exec -i "$ECS_INSTANCE" -r cn-beijing --timeout 120 -c "cd /opt/myleafy/staging/current/backend && /usr/local/bin/node --env-file=/etc/myleafy/staging.env scripts/staging-smoke.mjs" -o json
+          fi
           mkdir -p deployment-report
           workbench download "/opt/myleafy/$TARGET/deployment.json" deployment-report/deployment.json -i "$ECS_INSTANCE" -r cn-beijing
       - uses: actions/upload-artifact@v4

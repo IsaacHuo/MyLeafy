@@ -14,5 +14,5 @@ for(const name of ['snapshot.mjs','cloudflare-auth.mjs'])cpSync(resolve(root,'ba
 const files={};
 function walk(directory){for(const name of readdirSync(directory)){const path=join(directory,name);if(lstatSync(path).isDirectory())walk(path);else files[relative(tree,path)]=createHash('sha256').update(readFileSync(path)).digest('hex');}}
 walk(tree);writeFileSync(join(tree,'release-manifest.json'),JSON.stringify({version:1,commit,files},null,2));
-const artifact=join(output,`myleafy-${commit}.tar.gz`);execFileSync('tar',['-C',tree,'-czf',artifact,'.'],{env:{...process.env,COPYFILE_DISABLE:'1'}});
+const artifact=join(output,`myleafy-${commit}.tar.gz`);execFileSync('tar',['--no-xattrs','-C',tree,'-czf',artifact,'.'],{env:{...process.env,COPYFILE_DISABLE:'1'}});
 writeFileSync(artifact+'.sha256',createHash('sha256').update(readFileSync(artifact)).digest('hex')+'\n');console.log(JSON.stringify({commit,artifact,files:Object.keys(files).length}));

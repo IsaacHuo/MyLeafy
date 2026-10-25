@@ -3,10 +3,10 @@ import {cloudflareToken,cloudflareRequest} from '../migration/cloudflare-auth.mj
 export async function source(environment){
   if(!['staging','production'].includes(environment))throw new Error('Invalid environment');
   const config=JSON.parse(await readFile(new URL('../../wrangler.jsonc',import.meta.url),'utf8'));
-  const selected=config.env[environment],token=await cloudflareToken();
+  const selected=config.env[environment];
   const base=`https://api.cloudflare.com/client/v4/accounts/${config.account_id}`;
   async function request(path,options={}){
-    const response=await cloudflareRequest(base+path,{...options,headers:{Authorization:`Bearer ${token}`,...options.headers}});
+    const response=await cloudflareRequest(base+path,{...options,headers:{Authorization:`Bearer ${await cloudflareToken()}`,...options.headers}});
     if(!response.ok)throw new Error(`Cloudflare request failed (${response.status}); credentials and response body omitted`);
     return response;
   }

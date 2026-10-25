@@ -42,3 +42,6 @@ staging.myleafy.space {
 www.myleafy.space {
   redir https://myleafy.space{uri} permanent
 }
+
+# Keep private acceptance available after public activation.
+import /etc/myleafy/Caddyfile.private

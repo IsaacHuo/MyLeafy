@@ -11,6 +11,7 @@ import { onRequestGet as sharePage } from '../../../site/functions/share/[[path]
 
 export function createHandler(env: BackendEnv, maintenanceFile: string) {
   const apiOrigin = new URL(env.API_ORIGIN), siteOrigin = new URL(env.SITE_ORIGIN);
+  const siteGatewayHost=env.ENVIRONMENT==='staging'?'localhost:8081':siteOrigin.host;
   const downloadHost = env.ENVIRONMENT === 'production' ? 'downloads.myleafy.space' : 'downloads-staging.myleafy.space';
   const publicAPI = {fetch:(request:Request) => {
     const url=new URL(request.url);
@@ -20,15 +21,13 @@ export function createHandler(env: BackendEnv, maintenanceFile: string) {
   return async (input: Request, bindings?: HttpBindings | Http2Bindings): Promise<Response> => {
     const url = new URL(input.url);
     try {
-      if (![apiOrigin.host,siteOrigin.host,downloadHost].includes(url.host)) return new Response('Unknown host',{status:421});
+      if (![apiOrigin.host,siteOrigin.host,siteGatewayHost,downloadHost].includes(url.host)) return new Response('Unknown host',{status:421});
       if (existsSync(maintenanceFile)) return Response.json({error:'服务维护中，请稍后重试。',errorEnvelope:{code:'maintenance',message:'服务维护中，请稍后重试。',retryable:true}},{status:503,headers:{'Retry-After':'60','Cache-Control':'no-store'}});
       const headers = new Headers(input.headers);
       const ip = headers.get('x-real-ip') ?? '';
       for(const name of ['cf-connecting-ip','x-leafy-client-ip','x-forwarded-for','forwarded'])headers.delete(name);
       headers.set('x-leafy-client-ip',isIP(ip)?ip:'0.0.0.0');
-      // The existing site proxy consumes this name; it only receives the sanitized value.
-      headers.set('cf-connecting-ip',isIP(ip)?ip:'0.0.0.0');
-      const origin = url.host===siteOrigin.host ? siteOrigin : apiOrigin;
+      const origin = url.host===siteOrigin.host||url.host===siteGatewayHost ? siteOrigin : apiOrigin;
       const request = new Request(new URL(url.pathname+url.search,origin),new Request(input,{headers}));
       // The Node adapter stores its upgrade handshake symbol on the bindings object.
       // Preserve that object identity so WebSocket upgrades can complete.

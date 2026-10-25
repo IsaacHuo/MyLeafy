@@ -3,7 +3,7 @@ import SQLite from 'better-sqlite3';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {inspectSchema,selectRows,sha,restoreDatabase} from '../scripts/ecs/snapshot.mjs';
+import {inspectSchema,selectRows,sha,restoreDatabase,verifyReferences} from '../scripts/ecs/snapshot.mjs';
 it('restores exact int64, blobs, rowids, generated columns, triggers and FTS without source changes',()=>{
  const directory=mkdtempSync(join(tmpdir(),'leafy-snapshot-')),source=new SQLite(':memory:');
  try{
@@ -27,4 +27,12 @@ it('restores exact int64, blobs, rowids, generated columns, triggers and FTS wit
  }finally{target.close();}
  expect(source.prepare('SELECT count(*) n FROM posts').get()).toEqual({n:1});
  }finally{source.close();rmSync(directory,{recursive:true,force:true});}
+});
+
+it('requires attached media and retained release bytes to match the database',()=>{
+ const table={name:'file_objects',columns:['bucket','path','state','sha256','byte_size'].map(name=>({name})),rows:[{values:['community-images','a.jpg','attached','abc','7'].map(v=>({v}))}]};
+ const snapshot={tables:[table],objects:[{store:'files',key:'community-images/a.jpg',sha256:'abc',size:7}]};
+ expect(verifyReferences(snapshot)).toEqual({referencesVerified:true});
+ expect(()=>verifyReferences({...snapshot,objects:[]})).toThrow('Attached media reference');
+ expect(()=>verifyReferences({...snapshot,objects:[{...snapshot.objects[0],size:8}]})).toThrow('Attached media reference');
 });

@@ -55,6 +55,7 @@ it('gateway rejects direct admin routes and freezes auth, release and site APIs 
  const {env,directory}=await fixture(),maintenance=join(directory,'maintenance'),handler=createHandler(env,maintenance);
  expect((await handler(new Request(`${env.API_ORIGIN}/admin/actions`,{method:'POST'}))).status).toBe(404);
  expect((await handler(new Request('https://attacker.invalid/v1/auth/get-session'))).status).toBe(421);
+ expect((await handler(new Request('http://localhost:8081/api/admin/me',{headers:{Origin:env.SITE_ORIGIN,'X-Leafy-Admin-CSRF':'1'}}))).status).toBe(401);
  expect((await handler(new Request(`${env.SITE_ORIGIN}/api/admin/me`))).status).toBe(403);
  await writeFile(maintenance,'test');
  for(const path of [`${env.API_ORIGIN}/v1/auth/sign-in/anonymous`,`${env.API_ORIGIN}/v1/releases/android/latest`,`${env.SITE_ORIGIN}/api/admin/login`])expect((await handler(new Request(path))).status).toBe(503);

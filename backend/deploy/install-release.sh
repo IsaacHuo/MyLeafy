@@ -4,10 +4,31 @@ myleafy_environment=${1:?environment}; myleafy_commit=${2:?commit}; myleafy_arch
 [[ "$myleafy_environment" == staging || "$myleafy_environment" == production ]]
 [[ "$myleafy_commit" =~ ^[a-f0-9]{40}$ && "$myleafy_hash" =~ ^[a-f0-9]{64}$ ]]
 [[ $(sha256sum "$myleafy_archive" | cut -d' ' -f1) == "$myleafy_hash" ]]
+# All production activations require the workflow's acceptance artifact and gate.
+if [[ "$myleafy_environment" == production ]]; then
+  [[ "${MYLEAFY_PRODUCTION_ACCEPTED:-}" == "$myleafy_commit" ]]
+  [[ -f /etc/myleafy/filing-approved ]]
+fi
 exec 9>"/run/lock/myleafy-${myleafy_environment}.lock"; flock -n 9
 myleafy_root="/opt/myleafy/${myleafy_environment}"
 myleafy_release="${myleafy_root}/releases/${myleafy_commit}"
-[[ ! -e "$myleafy_release" ]]
+myleafy_port=3101; myleafy_host=api-staging.myleafy.space
+if [[ "$myleafy_environment" == production ]]; then myleafy_port=3100; myleafy_host=api.myleafy.space; fi
+if [[ -e "$myleafy_release" ]]; then
+  [[ "$(readlink "${myleafy_root}/current")" == "$myleafy_release" ]]
+  /usr/local/bin/node "$myleafy_release/backend/scripts/ecs/verify-release.mjs" "$myleafy_release" "$myleafy_commit"
+  # A retry may produce a differently compressed archive, but every release file
+  # must match the already accepted manifest. Never overwrite a partial install.
+  tar -xOf "$myleafy_archive" ./release-manifest.json | cmp - "$myleafy_release/release-manifest.json"
+  curl -fsS -H "Host: $myleafy_host" "http://127.0.0.1:${myleafy_port}/health" >"${myleafy_root}/retry-health.json"
+  /usr/local/bin/node --input-type=module - "$myleafy_root" "$myleafy_environment" "$myleafy_commit" <<'JS'
+import {readFileSync} from 'node:fs';
+const [root,environment,commit]=process.argv.slice(2),report=JSON.parse(readFileSync(root+'/deployment.json','utf8')),health=JSON.parse(readFileSync(root+'/retry-health.json','utf8'));
+if(!report.success||report.commit!==commit||report.environment!==environment||health.status!=='ok'||health.commit!==commit||health.environment!==environment)throw new Error('Existing release has no matching successful deployment evidence');
+console.log(JSON.stringify({environment,commit,verified:true,idempotent:true}));
+JS
+  exit 0
+fi
 [[ -f "/etc/myleafy/${myleafy_environment}.env" ]]
 [[ -f "/var/lib/myleafy/${myleafy_environment}/database.sqlite" ]]
 # Prevent archive traversal and links before extraction, including parent symlinks.
@@ -23,11 +44,7 @@ tar -xzf "$myleafy_archive" -C "$myleafy_release" --no-same-owner
 /usr/local/bin/node "$myleafy_release/backend/scripts/ecs/verify-release.mjs" "$myleafy_release" "$myleafy_commit"
 cd "$myleafy_release/backend"
 /usr/local/bin/npm ci --omit=dev --registry=https://registry.npmjs.org --no-audit --no-fund
-# All production activations require the workflow's acceptance artifact and gate.
-if [[ "$myleafy_environment" == production ]]; then
-  [[ "${MYLEAFY_PRODUCTION_ACCEPTED:-}" == "$myleafy_commit" ]]
-  [[ -f /etc/myleafy/filing-approved ]]
-fi
+
 if systemctl is-active --quiet "myleafy@${myleafy_environment}"; then
   systemctl stop "myleafy@${myleafy_environment}"
   if ! /opt/myleafy/"$myleafy_environment"/current/backend/deploy/backup.sh "$myleafy_environment" --lock-held; then
@@ -50,8 +67,6 @@ mv -Tf "${myleafy_root}/current.new" "${myleafy_root}/current"
 install -m 644 deploy/myleafy@.service deploy/myleafy-backup@.service deploy/myleafy-backup@.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl start "myleafy@${myleafy_environment}"
-myleafy_port=3101; myleafy_host=api-staging.myleafy.space
-if [[ "$myleafy_environment" == production ]]; then myleafy_port=3100; myleafy_host=api.myleafy.space; fi
 # A restore stays behind maintenance until its own verification is accepted.
 for myleafy_attempt in {1..20}; do
   if curl -fsS -H "Host: $myleafy_host" "http://127.0.0.1:${myleafy_port}/health" >"${myleafy_root}/health.json"; then break; fi

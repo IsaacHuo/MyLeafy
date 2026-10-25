@@ -1,11 +1,14 @@
 import SQLite from 'better-sqlite3';
 import {readFile,readdir,mkdir,writeFile,rename,rm} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
+import {parseEnv} from 'node:util';
 import {spawnSync} from 'node:child_process';
 import {backupKey,encrypt} from '../migration/snapshot.mjs';
-import {inspectSchema,selectRows,sha} from './snapshot.mjs';
+import {inspectSchema,selectRows,sha,verifyReferences} from './snapshot.mjs';
 const [root,backupRoot,envFile,environment]=process.argv.slice(2);
 if(!root||!backupRoot||!envFile||!['staging','production'].includes(environment))throw new Error('Usage: local-backup.mjs STOPPED_DATA_DIRECTORY BACKUP_DIRECTORY ENV_FILE staging|production');
+const configuration=parseEnv(await readFile(envFile,'utf8'));
+if(configuration.ENVIRONMENT!==environment||resolve(configuration.DATA_DIRECTORY??'')!==resolve(root))throw new Error('Backup environment and data directory must match protected runtime configuration');
 const key=backupKey(),id='snapshot-'+new Date().toISOString().replace(/[:.]/g,'-');
 await mkdir(backupRoot,{recursive:true,mode:0o700});
 const directory=join(backupRoot,id+'.partial');await mkdir(directory,{mode:0o700});
@@ -24,6 +27,7 @@ try{
 }finally{db.close();}
 for(const store of ['files','releases']){
  for(const entry of await readdir(join(root,store),{withFileTypes:true})){
+  if(entry.isDirectory()&&/^\.pending-[a-f0-9-]{36}$/.test(entry.name)){await rm(join(root,store,entry.name),{recursive:true});continue;}
   if(!entry.isDirectory()||!/^\w{64}$/.test(entry.name))throw new Error('Unexpected object-store entry');
   const path=join(root,store,entry.name),metadata=JSON.parse(await readFile(join(path,'metadata.json'),'utf8')),bytes=await readFile(join(path,'data'));
   if(bytes.length!==metadata.size||sha(bytes)!==metadata.customMetadata.sha256)throw new Error('Backup object integrity failed');
@@ -33,7 +37,7 @@ for(const store of ['files','releases']){
  }
 }
 await writeFile(join(directory,'runtime-config.enc'),encrypt(await readFile(envFile),key,'ecs-runtime-env-v1'),{mode:0o600});
-snapshot.complete=true;await save();
+verifyReferences(snapshot);snapshot.complete=true;await save();
 const archive=join(resolve(backupRoot),id+'.tar');
 const tar=spawnSync('tar',['-C',directory,'-cf',archive,'.'],{stdio:'ignore'});
 if(tar.status!==0)throw new Error('Encrypted snapshot archive failed');

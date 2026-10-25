@@ -2,10 +2,11 @@ import SQLite from 'better-sqlite3';
 import WebSocket from 'ws';
 import {join} from 'node:path';
 import assert from 'node:assert/strict';
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 
 if(process.env.ENVIRONMENT!=='staging'||process.env.DATA_DIRECTORY!=='/var/lib/myleafy/staging')throw new Error('Refusing smoke fixtures outside dedicated ECS staging');
+if(process.getuid?.()===0){process.setgroups([]);process.setgid('myleafy');process.setuid('myleafy');}
 const database=new SQLite('/var/lib/myleafy/staging/database.sqlite',{fileMustExist:true});database.pragma('foreign_keys=ON');
 async function sql(query,params=[]){const statement=database.prepare(query);if(statement.reader)return statement.all(...params);statement.run(...params);return [];}
 const [control]=await sql('SELECT mode FROM backend_control WHERE id=1');
@@ -44,7 +45,7 @@ try{
   const health=(await call('/health')).payload;
   const site=await fetch(base);assert.equal(site.status,200);assert.match(await site.text(),/<div id="root"/);checks.push('website-through-caddy');
   const release=await (await fetch(base+'/release.json')).json();assert.equal(release.commit,health.commit);checks.push('website-api-same-commit');
-  const admin=await fetch(base+'/api/admin/me',{headers:{Origin:'http://localhost:8081','Sec-Fetch-Site':'same-origin'}});assert.equal(admin.status,401);checks.push('private-admin-proxy-denied');
+  const admin=await fetch(base+'/api/admin/me',{headers:{Origin:process.env.SITE_ORIGIN??'http://localhost:8081','Sec-Fetch-Site':'same-origin','X-Leafy-Admin-CSRF':'1'}});assert.equal(admin.status,401);checks.push('private-admin-proxy-denied');
   const report={generated_at:new Date().toISOString(),environment:'staging',commit:health.commit,passed:checks};
   await writeFile(join(process.env.DATA_DIRECTORY,'smoke-report.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
   console.log(JSON.stringify(report,null,2));

@@ -48,3 +48,18 @@ export function verifyDatabase(snapshot,db){
  if(snapshot.sequences){const actual=db.prepare('SELECT name,CAST(seq AS TEXT) seq FROM sqlite_sequence ORDER BY name').all();if(JSON.stringify(actual)!==JSON.stringify(snapshot.sequences))throw new Error('Sequence verification failed');}
  return {tables:snapshot.tables.length,rows:snapshot.tables.reduce((n,t)=>n+t.rows.length,0)};
 }
+
+/** Validate database-to-object links, not just independent file checksums. */
+export function verifyReferences(snapshot){
+ const objects=new Map((snapshot.objects??[]).map(o=>[`${o.store}/${o.key}`,o]));
+ const records=name=>{const table=snapshot.tables.find(t=>t.name===name);return table?table.rows.map(row=>Object.fromEntries(table.columns.map((c,i)=>[c.name,row.values[i].v]))):[];};
+ for(const record of records('file_objects'))if(record.state==='attached'){
+  const object=objects.get(`files/${record.bucket}/${record.path}`);
+  if(!object||object.sha256!==record.sha256||object.size!==Number(record.byte_size))throw new Error('Attached media reference failed integrity verification');
+ }
+ for(const record of records('android_releases')){
+  const info=JSON.parse(record.metadata),object=objects.get(`releases/${info.artifactKey}`);
+  if(!object||object.sha256!==info.sha256||object.size!==info.sizeBytes)throw new Error('Retained Android release reference failed integrity verification');
+ }
+ return {referencesVerified:true};
+}

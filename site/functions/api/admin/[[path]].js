@@ -31,7 +31,7 @@ export async function onRequest(context) {
         method: 'PUT', body: bytes, headers: {
           'Content-Type': context.request.headers.get('content-type') || 'application/octet-stream',
           Authorization: `Bearer ${token}`, 'x-request-id': requestID,
-          'x-leafy-client-ip': context.request.headers.get('cf-connecting-ip') || '0.0.0.0',
+          'x-leafy-client-ip': context.request.headers.get('x-leafy-client-ip') || '0.0.0.0',
         },
       }));
       return proxyResponse(upstream, requestID, upstream.status === 401);
@@ -63,7 +63,7 @@ export async function onRequest(context) {
         Accept: route === "export" ? "text/csv, application/json" : "application/json",
         "Content-Type": "application/json",
         "x-request-id": requestID,
-        "x-leafy-client-ip": context.request.headers.get("cf-connecting-ip") || "0.0.0.0",
+        "x-leafy-client-ip": context.request.headers.get("x-leafy-client-ip") || "0.0.0.0",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(body !== undefined ? { body: body || "{}" } : {}),

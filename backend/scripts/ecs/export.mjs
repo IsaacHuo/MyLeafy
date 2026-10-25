@@ -1,5 +1,5 @@
 import {source,quote} from './cloudflare.mjs';
-import {inspectSchema,selectRows,sha} from './snapshot.mjs';
+import {inspectSchema,selectRows,sha,verifyReferences} from './snapshot.mjs';
 import {backupKey,encrypt} from '../migration/snapshot.mjs';
 import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -42,5 +42,5 @@ for(const binding of remote.selected.r2_buckets){
   cursor=listed.result_info?.is_truncated?listed.result_info.cursor:'';await save();
  }while(cursor);
 }
-snapshot.complete=true;await save();
+verifyReferences(snapshot);snapshot.complete=true;await save();
 console.log(JSON.stringify({environment,complete:true,consistent:snapshot.consistent,tables:snapshot.tables.length,objects:snapshot.objects.length}));

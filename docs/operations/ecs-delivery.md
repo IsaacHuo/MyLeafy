@@ -10,7 +10,7 @@
 - `/etc/myleafy/<environment>.backup.env`：0600，仅包含 BACKUP_ENCRYPTION_KEY；密钥在服务器之外单独保留。
 - `/var/backups/myleafy/<environment>`：加密快照及 tar / SHA-256；备份不是公开网站文件。
 
-bootstrap 只安装 Node 24.22.1、Caddy 2.11.7、系统用户和目录；不启动公网入口，不覆盖已存在配置。Node 使用 SHA-256，Caddy 官方清单使用 SHA-512，失败即停止。私有 Caddy 配置只监听 127.0.0.1:8081，公开配置须备案后启用。www 跳转主域，下载域名继续服务原 APK。
+bootstrap 只安装 Node 24.22.1、Caddy 2.11.7、系统用户和目录；不启动公网入口，不覆盖已存在配置。Node 使用 SHA-256，Caddy 官方清单使用 SHA-512，失败即停止。私有 Caddy 配置只监听 127.0.0.1:8081，另保存为 `/etc/myleafy/Caddyfile.private`。公开配置须备案后启用，继续导入该私有入口用于后续受控验收；公开 staging 启用时将其 SITE_ORIGIN 改为 https://staging.myleafy.space。www 跳转主域，下载域名继续服务原 APK。
 
 ## 数据操作（仓库根目录）
 
@@ -25,6 +25,8 @@ node --env-file=backend/.env.migration backend/dist/restore.mjs PRIVATE_BACKUP E
 restore 默认保留 `maintenance`，失败保留 `restore-failed`，不激活残缺数据。完成逐表/文件校验后，先做备份恢复演练，再由操作者接通私有验收。待应用 migration 单独执行 `node backend/scripts/ecs/migrate.mjs DATABASE_PATH`，须先停服务和备份。该工具保留 `d1_migrations` 记录，不能对已建结构重放全部历史 SQL。
 
 最终生产导出只在备案和验收均满足后执行：使用 `freeze-source.mjs` 和独立 `backend/cutover/maintenance.ts` 冻结现有 Worker 的全部入口，保存报告并确认在途任务结束，通过 `SOURCE_FREEZE_REPORT` 指定报告，以 `--quiesced` 导出，再 `--production` 恢复。不要为导出在源库删除 FTS 表。备份中原始运行配置可用同一备份密钥及 AAD `ecs-runtime-env-v1` 解密，不能把解密结果写入报告。
+
+生产配置可使用 `prepare-production.py --originals PRIVATE_JSON --output NEW_ENV_FILE` 从原始 Secret 生成 0600 文件；缺失发布凭据会明确列出，不生成替代值或自动轮换。`check-services.mjs` 仅检查邮件/GitHub 可达性，不发送邮件或触发发布；实际送达与发布仍须独立验收。
 
 ## 构建、部署与恢复
 
