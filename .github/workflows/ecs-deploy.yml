@@ -88,6 +88,8 @@ jobs:
           npm --prefix backend run check:contracts
           npm --prefix backend test
           npm --prefix backend run test:migration
+          python3 -m pip install -r backend/scripts/ecs/requirements.txt
+          python3 -m unittest discover -s backend/tests -p 'test_ecs_*.py'
           npm --prefix backend run build
           npm --prefix site test
           npm --prefix site run build

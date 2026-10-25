@@ -1,3 +1,5 @@
+import {serve} from '@hono/node-server';
+import WebSocket,{WebSocketServer} from 'ws';
 import {afterEach,expect,it,vi} from 'vitest';
 import {mkdtemp,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -70,4 +72,24 @@ it('signal delivery isolates rooms and closes expired sessions before publishing
  await env.SIGNALS.publish('campus:bjfu','two');expect(socket.send).toHaveBeenCalledWith(JSON.stringify({type:'changed',event_id:'two'}));
  db.native.prepare("DELETE FROM identity_session WHERE id='s'").run();
  await env.SIGNALS.publish('campus:bjfu','three');expect(socket.close).toHaveBeenCalledWith(1008,'Subscription expired');expect(socket.send).toHaveBeenCalledTimes(1);
+});
+
+it('real Node HTTP bindings complete WebSocket upgrade and deliver signals',async()=>{
+ const {env,db,directory}=await fixture();
+ db.native.exec("INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('bjfu','北林','北林','北林','qiangzhi')");
+ const signed=await auth(env).handler(new Request(`${env.API_ORIGIN}/v1/auth/sign-in/anonymous`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}));
+ const token=signed.headers.get('set-auth-token'),user=(await signed.json()).user;
+ db.native.prepare("INSERT INTO profiles(id,campus_id,edu_id,nickname,is_profile_complete,community_campus_id,community_access_status) VALUES('p','bjfu','socket-test','测试',1,'bjfu','approved')").run();
+ db.native.prepare("INSERT INTO profile_auth_links(auth_user_id,profile_id,campus_id,edu_id) VALUES(?,'p','bjfu','socket-test')").run(user.id);
+ const wss=new WebSocketServer({noServer:true});
+ const server=serve({hostname:'127.0.0.1',port:0,fetch:createHandler(env,join(directory,'maintenance')),websocket:{server:wss}});
+ if(!server.listening)await new Promise<void>(resolve=>server.once('listening',resolve));
+ const address=server.address();if(!address||typeof address==='string')throw new Error('Expected TCP listener');
+ const socket=new WebSocket(`ws://127.0.0.1:${address.port}/v1/events/feed`,{headers:{Host:new URL(env.API_ORIGIN).host,Authorization:`Bearer ${token}`}});
+ try{
+  await new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Upgrade timeout')),3000);socket.once('open',()=>{clearTimeout(timer);resolve();});socket.once('error',error=>{clearTimeout(timer);reject(error);});});
+  const received=new Promise<string>((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Signal timeout')),3000);socket.once('message',data=>{clearTimeout(timer);resolve(data.toString());});});
+  await env.SIGNALS.publish('campus:bjfu','tcp-proof');
+  expect(JSON.parse(await received)).toEqual({type:'changed',event_id:'tcp-proof'});
+ }finally{socket.terminate();env.SIGNALS.close();wss.close();await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });

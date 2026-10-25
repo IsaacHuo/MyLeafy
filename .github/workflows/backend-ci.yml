@@ -36,4 +36,8 @@ jobs:
       - if: inputs.full
         run: python -m unittest discover -s scripts -p 'test_*.py'
       - if: inputs.full
+        run: python3 -m pip install -r scripts/ecs/requirements.txt
+      - if: inputs.full
+        run: python3 -m unittest discover -s tests -p 'test_ecs_*.py'
+      - if: inputs.full
         run: npm run build

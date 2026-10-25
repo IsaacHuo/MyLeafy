@@ -7,7 +7,7 @@ if(!destination)throw new Error('Usage: package.mjs NEW_OUTPUT_DIRECTORY');
 execFileSync('git',['diff','--exit-code','HEAD'],{cwd:root,stdio:'ignore'});
 const commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 const output=resolve(destination);mkdirSync(output,{mode:0o700});const tree=join(output,'release');mkdirSync(tree);
-for(const path of ['backend/dist','backend/package.json','backend/package-lock.json','backend/migrations','backend/deploy','site/dist']){mkdirSync(resolve(tree,path,'..'),{recursive:true});cpSync(resolve(root,path),resolve(tree,path),{recursive:true});}
+for(const path of ['backend/dist','backend/package.json','backend/package-lock.json','backend/migrations','backend/deploy','backend/scripts/staging-smoke.mjs','site/dist']){mkdirSync(resolve(tree,path,'..'),{recursive:true});cpSync(resolve(root,path),resolve(tree,path),{recursive:true});}
 for(const path of ['backend/scripts/ecs','backend/scripts/migration'])mkdirSync(resolve(tree,path),{recursive:true});
 for(const name of readdirSync(resolve(root,'backend/scripts/ecs')).filter(n=>n.endsWith('.mjs')))cpSync(resolve(root,'backend/scripts/ecs',name),resolve(tree,'backend/scripts/ecs',name));
 for(const name of ['snapshot.mjs','cloudflare-auth.mjs'])cpSync(resolve(root,'backend/scripts/migration',name),resolve(tree,'backend/scripts/migration',name));

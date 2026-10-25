@@ -30,7 +30,9 @@ export function createHandler(env: BackendEnv, maintenanceFile: string) {
       headers.set('cf-connecting-ip',isIP(ip)?ip:'0.0.0.0');
       const origin = url.host===siteOrigin.host ? siteOrigin : apiOrigin;
       const request = new Request(new URL(url.pathname+url.search,origin),new Request(input,{headers}));
-      if(url.host===apiOrigin.host) return await app.fetch(request,{...env,...bindings});
+      // The Node adapter stores its upgrade handshake symbol on the bindings object.
+      // Preserve that object identity so WebSocket upgrades can complete.
+      if(url.host===apiOrigin.host) return await app.fetch(request,bindings?Object.assign(bindings,env):env);
       if(url.host===downloadHost) {
         if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});
         const key=decodeURIComponent(url.pathname.slice(1));

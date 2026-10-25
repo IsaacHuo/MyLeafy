@@ -47,6 +47,12 @@ workbench download /var/backups/myleafy/staging/SNAPSHOT.tar.sha256 /LOCAL_PRIVA
 
 Workbench 单文件传输上限按所安装版本核对。快照超过限制须分卷并分别校验；不跳过文件，也不以数据库成功代替文件成功。
 
+## DNS 记录准备
+
+先从 Cloudflare 导出 BIND zone 文件，在受保护的本机目录保存。安装 `backend/scripts/ecs/requirements.txt` 后，运行 `aliyun-dns.py --source EXPORT_FILE --plan NEW_PLAN_FILE`，只生成计划，不改 DNS。它保留邮件/TXT/CAA 等记录，替换已知服务域名为 ECS 地址；发现未映射 Cloudflare 子域或不支持类型时停止。阿里云已有冲突记录也停止，不覆盖他人修改。
+
+备案及所有者验收后才使用 `--plan PLAN_FILE --apply --filing-approved`。脚本核对计划以来 DNS 未被修改，只新增已审阅记录，并保存创建结果；部分失败必须根据实际结果重新生成计划，不能盲目重放。NS 与 DNSSEC/DS 另行核对；2026-10-26 公共委派已经是 dns27/dns28.hichina.com，未检测到 DS，不能因为本机旧缓存再次改回 Cloudflare。
+
 ## 正式切换验收
 
 备案系统的主体、人脸、短信核验和最终生产验收由所有者完成。切换前核对全部 DNS 记录、CAA、DNSSEC/DS、API/Pages/R2 域名绑定与 HTTPS 证书。切换后分别从权威 NS 和公共解析器检查根域、www、API、下载及测试域，确认不再指向 Cloudflare；验证网站、管理拒绝、签名媒体、WebSocket、邮件及 GitHub 发行流程。对外拨测不得包含真实学生凭据或修改生产业务数据。
