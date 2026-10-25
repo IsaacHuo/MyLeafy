@@ -36,7 +36,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.MyLeafyApplication
-import com.myleafy.android.core.prefs.Settings
 import com.myleafy.android.features.timetable.domain.SemesterConfig
 import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
 import com.myleafy.android.features.timetable.domain.TimetableUserSettings
@@ -64,19 +63,21 @@ fun TimetableSettingsScreen(
 ) {
     val context = LocalContext.current
     val container = (context.applicationContext as MyLeafyApplication).container
-    val settings by container.settingsStore.settings.collectAsStateWithLifecycle(initialValue = Settings())
-    var draft by remember { mutableStateOf(settings.timetableSettings) }
+    // DataStore 首帧还没有真实值：null 表示“尚未读出”，不能把默认设置当成用户设置。
+    val persisted by container.settingsStore.settings.collectAsStateWithLifecycle(initialValue = null)
+    val storedSettings = persisted?.timetableSettings
+    var draft by remember { mutableStateOf(storedSettings ?: TimetableUserSettings()) }
     var initialized by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(settings.timetableSettings) {
-        if (!initialized) {
-            draft = settings.timetableSettings
+    LaunchedEffect(storedSettings) {
+        if (!initialized && storedSettings != null) {
+            draft = storedSettings
             initialized = true
         }
     }
-    val dirty = initialized && draft != settings.timetableSettings
+    val dirty = initialized && storedSettings != null && draft != storedSettings
     val requestExit = rememberEditorExit(dirty, saving, onBack)
 
     fun showDatePicker() {
@@ -115,6 +116,7 @@ fun TimetableSettingsScreen(
     }
 
     fun save() {
+        if (!initialized) return
         val normalized = draft.copy(firstMonday = TimetableUserSettings.mondayOf(draft.firstMonday))
         val validation = normalized.validationError
         if (validation != null) {
@@ -214,7 +216,7 @@ fun TimetableSettingsScreen(
             item {
                 LeafyPrimaryButton(
                     onClick = ::save,
-                    enabled = !saving && draft.isValid,
+                    enabled = !saving && initialized && draft.isValid,
                     modifier = Modifier.fillMaxWidth().testTag("timetable-settings-save"),
                 ) {
                     Text(if (saving) "保存中…" else "保存课表设置")
