@@ -3,3 +3,6 @@ alibabacloud_domain20180129==5.1.1
 alibabacloud_ecs20140526==7.11.7
 
 dnspython==2.7.0
+
+alibabacloud_ram20150501==1.3.0
+alibabacloud_sts20150401==1.2.0

@@ -1,4 +1,4 @@
-export const privacyUpdatedAt = "2026 年 10 月 16 日";
+export const privacyUpdatedAt = "2026 年 10 月 26 日";
 
 export const privacySections = [{
     id: "data",
@@ -33,9 +33,9 @@ export const privacySections = [{
     title: "第三方服务",
     items: [
       "北京林业大学教务系统用于学校登录与教务数据查询。",
-      "Cloudflare 为新版 MyLeafy 提供账号服务运行环境、社区数据和文件存储，以及通知、反馈、评价、共享课表等功能。尚未迁移的旧版客户端继续使用 Supabase。",
-      "Cloudflare 为 myleafy.space 提供官网访问和 support@myleafy.space 邮件转发。Resend 用于发送账号及邮箱验证邮件。",
-      "Apple 与 Android 系统能力用于照片与文件选择、位置、系统分享、通知与本地存储；Apple CloudKit 用于用户主动开启的 iCloud 同步，不上传学校密码、Cookie 或登录令牌。iOS 通过 App Store 分发；Android 使用 Cloudflare 版本与下载服务，GitHub Releases 同步发布相同安装包。版本检查和下载请求会携带网络连接所需的 IP 地址及应用包名，不包含学校账号或本地记录。"
+      "阿里云为新版 MyLeafy 提供账号服务运行环境、社区数据和文件存储，以及通知、反馈、评价、共享课表等功能。尚未迁移的旧版客户端继续使用 Supabase。",
+      "阿里云为 myleafy.space 提供官网访问和域名解析。Cloudflare 暂时继续提供 support@myleafy.space 邮件转发。Resend 用于发送账号及邮箱验证邮件。",
+      "Apple 与 Android 系统能力用于照片与文件选择、位置、系统分享、通知与本地存储；Apple CloudKit 用于用户主动开启的 iCloud 同步，不上传学校密码、Cookie 或登录令牌。iOS 通过 App Store 分发；Android 使用部署在阿里云上的 MyLeafy 版本与下载服务，GitHub Releases 同步发布相同安装包。版本检查和下载请求会携带网络连接所需的 IP 地址及应用包名，不包含学校账号或本地记录。"
     ]
   },
   {

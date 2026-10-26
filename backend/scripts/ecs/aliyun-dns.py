@@ -1,5 +1,5 @@
 """Plan a complete DNS import; applying requires the saved plan and filing approval."""
-import argparse, hashlib, json, os
+import argparse, hashlib, json, os, re
 from pathlib import Path
 import dns.zonefile, dns.rdatatype, dns.name, dns.rdataclass, dns.tokenizer
 from alibabacloud_tea_openapi.models import Config
@@ -11,9 +11,13 @@ SERVICE_HOSTS=['@','www','api','downloads','api-staging','downloads-staging','st
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 def identity(r):return (r['RR'],r['Type'],r.get('Line','default'),r['Value'],r.get('Priority',0))
 def desired_records(source):
+ text=Path(source).read_text(encoding='utf-8-sig')
+ # Cloudflare exports its apex SOA owner without a final dot even though every
+ # other owner is absolute. Normalize only that known export form.
+ text=re.sub(r'(?im)^('+re.escape(DOMAIN)+r')(?=[ \t]+(?:[0-9]+[ \t]+)?(?:IN[ \t]+)?SOA[ \t])',r'\1.',text)
  manager=dns.zonefile.RRSetsReaderManager(dns.name.from_text(DOMAIN),True,dns.rdataclass.IN)
  with manager.writer(True) as transaction:
-  reader=dns.zonefile.Reader(dns.tokenizer.Tokenizer(Path(source).read_text()),dns.rdataclass.IN,transaction,allow_directives={'$ORIGIN','$TTL'})
+  reader=dns.zonefile.Reader(dns.tokenizer.Tokenizer(text),dns.rdataclass.IN,transaction,allow_directives={'$ORIGIN','$TTL'})
   # Cloudflare flattens service CNAMEs alongside apex NS/TXT. Those service
   # addresses are replaced by A records below, so only skip that zone-rule check.
   check=transaction._check_put_rdataset[-1]

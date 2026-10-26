@@ -26,13 +26,13 @@ restore 默认保留 `maintenance`，失败保留 `restore-failed`，不激活�
 
 最终生产导出只在备案和验收均满足后执行：使用 `freeze-source.mjs` 和独立 `backend/cutover/maintenance.ts` 冻结现有 Worker 的全部入口，保存报告并确认在途任务结束，通过 `SOURCE_FREEZE_REPORT` 指定报告，以 `--quiesced` 导出，再 `--production` 恢复。冻结工具会阻断普通表的全部写入；不完整报告不能用于最终快照。目标先核对原始快照，再删除专用冻结机制，默认仍处于 maintenance。若目标从未开放写入，先停目标，再显式执行 `recover-source.mjs FREEZE_REPORT --confirmed-no-target-writes` 恢复源冻结机制与记录的旧代码；DNS 恢复另行处理。目标已接收新写入时禁止直接执行此恢复。不要为导出在源库删除 FTS 表。备份中原始运行配置可用同一备份密钥及 AAD `ecs-runtime-env-v1` 解密，不能把解密结果写入报告。
 
-生产配置可使用 `prepare-production.py --originals PRIVATE_JSON --output NEW_ENV_FILE` 从原始 Secret 生成 0600 文件；缺失发布凭据会明确列出，不生成替代值或自动轮换。`check-services.mjs` 仅检查邮件/GitHub 可达性，不发送邮件或触发发布；实际送达与发布仍须独立验收。
+生产配置可使用 `prepare-production.py --originals PRIVATE_JSON --output NEW_ENV_FILE` 从原始 Secret 生成 0600 文件；缺失发布凭据会明确列出，不擅自轮换。所有者已确认新的发布共享密钥，保存在待上线配置中；正式切换时从该同一份配置通过标准输入更新 GitHub 的 `MYLEAFY_RELEASE_PUBLISH_TOKEN`，并在 ECS 激活对应 `RELEASE_PUBLISH_TOKEN`，确认两端一致后再允许发布。`check-services.mjs` 仅检查邮件/GitHub 可达性，不发送邮件或触发发布；实际送达与发布仍须独立验收。
 
 ## 构建、部署与恢复
 
 新工作流 **Prepare or publish accepted ECS version** 只允许 main 发起，要求指定 SHA 是 main 的祖先，且精确提交最新 `CI result` 成功。staging 完成完整后端/网站/浏览器验证并生成文件摘要清单；production 消费成功 staging 的同一压缩包，不重新构建，要求所有者确认并经过 production Environment 审批。
 
-工作流使用独立、仅能访问目标实例的 RAM 身份，配置 `ALIYUN_WORKBENCH_ACCESS_KEY_ID`、`ALIYUN_WORKBENCH_ACCESS_KEY_SECRET`。本机用于初始化的凭据不自动上传 GitHub。首次由操作者安装 `/opt/myleafy/install-release.sh`、受保护 env、数据和 Caddy/systemd 配置；备案确认后才建立 `/etc/myleafy/filing-approved`。后续工作流不会创建该标记或修改权威 DNS。
+工作流使用独立、仅能访问目标实例的 RAM 身份，配置 `ALIYUN_WORKBENCH_ACCESS_KEY_ID`、`ALIYUN_WORKBENCH_ACCESS_KEY_SECRET`。本机用于初始化的凭据不上传 GitHub。独立 CI 身份可通过 `provision-ci.py --directory PRIVATE_DIRECTORY` 生成权限计划，核对后加 `--apply` 创建并配置 staging/production Secrets；远程执行限定目标 ECS，不创建控制台登录密码。新 AccessKey 首次生效可能短暂延迟，工具只对该明确错误做有限重试，不扩大权限。首次由操作者安装 `/opt/myleafy/install-release.sh`、受保护 env、数据和 Caddy/systemd 配置；备案确认后才建立 `/etc/myleafy/filing-approved`。后续工作流不会创建该标记或修改权威 DNS。
 
 部署按环境使用 flock 串行锁，核验归档 SHA-256、拒绝不安全 tar 路径、校验产物每个文件及源码 SHA，安装锁定生产依赖，然后备份、停服务、迁移、切换 current 和启动。`/health` 与网站 `/release.json` 标记同一源码。失败不自动回退数据库；先检查日志和备份，只有旧代码兼容当前数据库时才恢复上一 current 链接。
 
@@ -53,10 +53,10 @@ Workbench 单文件传输上限按所安装版本核对。快照超过限制须�
 
 先从 Cloudflare 导出 BIND zone 文件，在受保护的本机目录保存。安装 `backend/scripts/ecs/requirements.txt` 后，运行 `aliyun-dns.py --source EXPORT_FILE --plan NEW_PLAN_FILE`，只生成计划，不改 DNS。它保留邮件/TXT/CAA 等记录，替换已知服务域名为 ECS 地址；发现未映射 Cloudflare 子域或不支持类型时停止。阿里云已有冲突记录也停止，不覆盖他人修改。
 
-备案及所有者验收后才使用 `--plan PLAN_FILE --apply --filing-approved`。脚本核对计划以来 DNS 未被修改，只新增已审阅记录，并保存创建结果；部分失败必须根据实际结果重新生成计划，不能盲目重放。NS 与 DNSSEC/DS 另行核对；2026-10-26 公共委派已经是 dns27/dns28.hichina.com，未检测到 DS，不能因为本机旧缓存再次改回 Cloudflare。
+备案及所有者验收后才使用 `--plan PLAN_FILE --apply --filing-approved`。脚本核对计划以来 DNS 未被修改，只新增已审阅记录，并保存创建结果；部分失败必须根据实际结果重新生成计划，不能盲目重放。当前 19 条计划中的邮件记录按原值保留，邮件服务迁移不阻塞其他目标；旧计划中的邮件阻塞标记已按所有者决定解除。NS 与 DNSSEC/DS 另行核对；2026-10-26 公共委派已经是 dns27/dns28.hichina.com，未检测到 DS，不能因为本机旧缓存再次改回 Cloudflare。
 
 ## 正式切换验收
 
 备案系统的主体、人脸、短信核验和最终生产验收由所有者完成。切换前核对全部 DNS 记录、CAA、DNSSEC/DS、API/Pages/R2 域名绑定与 HTTPS 证书。切换后分别从权威 NS 和公共解析器检查根域、www、API、下载及测试域，确认不再指向 Cloudflare；验证网站、管理拒绝、签名媒体、WebSocket、邮件及 GitHub 发行流程。对外拨测不得包含真实学生凭据或修改生产业务数据。
 
-旧 Cloudflare 资源先冻结保留，至少 7 天；退役包括 Pages/Workers/D1/R2、旧 Cron、域名绑定与专用发布凭据。旧 Supabase 不在退役范围。未完成的步骤必须继续记为待办，不能凭本地测试或源码合入宣称迁移完成。
+旧 Cloudflare 后端资源先冻结保留，至少 7 天；退役包括 Pages/Workers/D1/R2、旧 Cron、网站/API/下载绑定与专用发布凭据。支持邮箱迁移已暂缓，保留 Cloudflare Email Routing、邮件 MX/SPF/DKIM 及其 Zone，不因网站或 API 迁移删除。旧 Supabase 不在退役范围。未完成的步骤必须继续记为待办，不能凭本地测试或源码合入宣称迁移完成。
