@@ -37,4 +37,4 @@ try{
  report.complete=true;report.allEntrypointsBlocked=true;report.frozenAt=new Date().toISOString();
  await writeFile(reportPath,JSON.stringify(report,null,2),{mode:0o600});
  console.log(JSON.stringify({environment,frozen:true,version:id,previousVersion:report.previousVersion,note:'Drain in-flight requests and publication jobs before final export'}));
-}catch{throw new Error('Source freeze failed; consult protected report and inspect active version before retrying. No database was changed.');}
+}catch{throw new Error('Source freeze failed; the source may be partially frozen. Inspect the protected report, active Worker version and database fences before retrying. No automatic recovery was performed.');}

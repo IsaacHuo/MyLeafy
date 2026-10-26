@@ -51,6 +51,20 @@ it('signed bearer sessions retain identity after SQLite backup and reconnection'
  const restored=await auth({...env,DB:copy}).api.getSession({headers,query:{disableRefresh:true}});
  expect(restored?.user.id).toBe(original?.user.id);expect(restored?.session.id).toBe(original?.session.id);
 });
+it('public APK downloads resume byte-for-byte and cannot expose private media',async()=>{
+ const {env,directory}=await fixture(),bytes=new TextEncoder().encode('0123456789'),key='android/official/12/MyLeafy-Android-1.2.8.apk';
+ const metadata=await env.RELEASES.put(key,bytes,{sha256:await sha256(bytes),httpMetadata:{contentType:'application/vnd.android.package-archive'}});
+ await env.FILES.put('community-attachments/private.pdf',bytes,{sha256:await sha256(bytes)});
+ const handler=createHandler(env,join(directory,'maintenance')),url='https://downloads-staging.myleafy.space/'+key;
+ const full=await handler(new Request(url));expect(full.status).toBe(200);expect(await full.text()).toBe('0123456789');
+ expect(full.headers.get('etag')).toBe(metadata?.httpEtag);
+ const head=await handler(new Request(url,{method:'HEAD'}));expect(head.status).toBe(200);expect(head.headers.get('content-length')).toBe('10');expect(await head.text()).toBe('');
+ const resumed=await handler(new Request(url,{headers:{Range:'bytes=4-'}}));expect(resumed.status).toBe(206);expect(resumed.headers.get('content-range')).toBe('bytes 4-9/10');expect(await resumed.text()).toBe('456789');
+ const cached=await handler(new Request(url,{headers:{'If-None-Match':metadata!.httpEtag}}));expect(cached.status).toBe(304);expect(await cached.text()).toBe('');
+ expect((await handler(new Request(url,{headers:{Range:'bytes=10-'}}))).status).toBe(416);
+ expect((await handler(new Request('https://downloads-staging.myleafy.space/community-attachments/private.pdf'))).status).toBe(404);
+ expect((await handler(new Request(url,{method:'PUT',body:'replacement'}))).status).toBe(405);
+});
 it('gateway rejects direct admin routes and freezes auth, release and site APIs together',async()=>{
  const {env,directory}=await fixture(),maintenance=join(directory,'maintenance'),handler=createHandler(env,maintenance);
  expect((await handler(new Request(`${env.API_ORIGIN}/admin/actions`,{method:'POST'}))).status).toBe(404);

@@ -131,7 +131,9 @@ export async function downloadAndroidCandidate(env:BackendEnv,context:AdminConte
   if(response.status===302){
     const location=response.headers.get('location');if(!location)throw new ApiError(502,'github_unavailable','候选下载地址缺失。');
     const url=new URL(location);if(url.protocol!=='https:'||url.hostname!=='release-assets.githubusercontent.com')throw new ApiError(502,'github_unavailable','候选下载地址无效。');
-    await response.body?.cancel();response=await fetch(url,{signal:AbortSignal.timeout(60000)});
+    // ECS streams the retained APK to the administrator over a cross-border
+    // link; allow a bounded five-minute transfer window.
+    await response.body?.cancel();response=await fetch(url,{signal:AbortSignal.timeout(300000)});
   }
   if(!response.ok||response.headers.get('content-type')?.includes('json')){await response.body?.cancel();throw new ApiError(502,'github_unavailable','候选安装包下载失败。',true);}
   return new Response(response.body,{headers:{'Content-Type':'application/vnd.android.package-archive','Content-Disposition':`attachment; filename="MyLeafy-Android-${info.versionName}.apk"`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});

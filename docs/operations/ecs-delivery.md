@@ -26,7 +26,17 @@ restore 默认保留 `maintenance`，失败保留 `restore-failed`，不激活�
 
 最终生产导出只在备案和验收均满足后执行：使用 `freeze-source.mjs` 和独立 `backend/cutover/maintenance.ts` 冻结现有 Worker 的全部入口，保存报告并确认在途任务结束，通过 `SOURCE_FREEZE_REPORT` 指定报告，以 `--quiesced` 导出，再 `--production` 恢复。冻结工具会阻断普通表的全部写入；不完整报告不能用于最终快照。目标先核对原始快照，再删除专用冻结机制，默认仍处于 maintenance。若目标从未开放写入，先停目标，再显式执行 `recover-source.mjs FREEZE_REPORT --confirmed-no-target-writes` 恢复源冻结机制与记录的旧代码；DNS 恢复另行处理。目标已接收新写入时禁止直接执行此恢复。不要为导出在源库删除 FTS 表。备份中原始运行配置可用同一备份密钥及 AAD `ecs-runtime-env-v1` 解密，不能把解密结果写入报告。
 
-生产配置可使用 `prepare-production.py --originals PRIVATE_JSON --output NEW_ENV_FILE` 从原始 Secret 生成 0600 文件；缺失发布凭据会明确列出，不擅自轮换。所有者已确认新的发布共享密钥，保存在待上线配置中；正式切换时从该同一份配置通过标准输入更新 GitHub 的 `MYLEAFY_RELEASE_PUBLISH_TOKEN`，并在 ECS 激活对应 `RELEASE_PUBLISH_TOKEN`，确认两端一致后再允许发布。`check-services.mjs` 仅检查邮件/GitHub 可达性，不发送邮件或触发发布；实际送达与发布仍须独立验收。
+生产配置可使用 `prepare-production.py --originals PRIVATE_JSON --output NEW_ENV_FILE` 从原始 Secret 生成 0600 文件；缺失发布凭据会明确列出，不擅自轮换。所有者已确认新的发布共享密钥，保存在待上线配置中；正式切换时从该同一份配置通过标准输入更新 GitHub 的 `MYLEAFY_RELEASE_PUBLISH_TOKEN`，并在 ECS 激活对应 `RELEASE_PUBLISH_TOKEN`，确认两端一致后再允许发布。`check-services.mjs` 只执行供应商只读检查，不发送邮件或触发发布；实际送达与发布仍须独立验收。
+
+备案期间可使用待上线配置做只读供应商验收。加 `--candidate-database` 时，从指定演练库只读选择最新候选，核对私有草稿及源码/文件身份，完整下载 APK 并按库内原始大小与 SHA-256 校验；仅流式计算，不重新签名、不发布。任何供应商或内容检查失败均返回非零退出码；报告不包含 Token、临时下载 URL 或学生资料。
+
+```sh
+cd /opt/myleafy/staging/current/backend
+/usr/local/bin/node --env-file=/etc/myleafy/production.env.pending scripts/ecs/check-services.mjs \
+  --candidate-database /var/lib/myleafy/production-rehearsal-20261026/database.sqlite
+```
+
+此项通过只说明供应商权限、下载字节和发信域名状态满足检查；不代表邮件已送达、发行已获批准或生产已上线。北京 ECS 的 GitHub 候选下载实测曾超过 60 秒，管理下载与验收工具采用有上限的五分钟窗口；不改变 APK 或客户端协议。
 
 ## 构建、部署与恢复
 
