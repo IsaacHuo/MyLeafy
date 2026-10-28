@@ -166,32 +166,43 @@ internal fun CampusDashboard(
 
     BoxWithConstraints(modifier = modifier) {
         if (maxWidth >= LeafyAdaptiveTokens.twoPaneBreakpoint) {
-            Row(
+            // 同步入口在根栏，结果提示必须对每个领域都可见；放进「学校教学」会让
+            // 其他领域下的失败/警告被完全隐藏。
+            Column(
                 modifier = Modifier.fillMaxSize().padding(horizontal = LeafySpacing.page),
-                horizontalArrangement = Arrangement.spacedBy(LeafySpacing.section),
             ) {
-                CampusDomainSidebar(
-                    domains = domains,
-                    selectedDomain = selectedDomain,
-                    onDomainSelected = { selectedDomain = it },
-                    modifier = Modifier.width(LeafyAdaptiveTokens.campusSidebarWidth).padding(top = LeafySpacing.card),
-                )
-                CampusDomainContent(
-                    domain = selectedDomain,
-                    listState = listStates.getValue(selectedDomain),
-                    syncState = syncState,
-                    campusId = campusId,
-                    onRetrySync = onRetrySync,
-                    onConsumeSync = onConsumeSync,
-                    onGradesClick = onGradesClick,
-                    onExamsClick = onExamsClick,
-                    onClassroomClick = onClassroomClick,
-                    onCommunityClick = onCommunityClick,
-                    onScheduleClick = onScheduleClick,
-                    canUseCommunity = canUseCommunity,
-                    onFeatureClick = onFeatureClick,
-                    modifier = Modifier.weight(1f),
-                )
+                if (syncState is CampusSyncState.Success || syncState is CampusSyncState.Error) {
+                    CampusSyncBanner(
+                        syncState = syncState,
+                        onRetrySync = onRetrySync,
+                        onConsumeSync = onConsumeSync,
+                        modifier = Modifier.padding(top = LeafySpacing.micro),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(LeafySpacing.section),
+                ) {
+                    CampusDomainSidebar(
+                        domains = domains,
+                        selectedDomain = selectedDomain,
+                        onDomainSelected = { selectedDomain = it },
+                        modifier = Modifier.width(LeafyAdaptiveTokens.campusSidebarWidth).padding(top = LeafySpacing.card),
+                    )
+                    CampusDomainContent(
+                        domain = selectedDomain,
+                        listState = listStates.getValue(selectedDomain),
+                        campusId = campusId,
+                        onGradesClick = onGradesClick,
+                        onExamsClick = onExamsClick,
+                        onClassroomClick = onClassroomClick,
+                        onCommunityClick = onCommunityClick,
+                        onScheduleClick = onScheduleClick,
+                        canUseCommunity = canUseCommunity,
+                        onFeatureClick = onFeatureClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         } else {
             CampusAllToolsContent(
@@ -502,6 +513,7 @@ private fun CampusSyncBanner(
     syncState: CampusSyncState,
     onRetrySync: () -> Unit,
     onConsumeSync: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     when (syncState) {
         is CampusSyncState.Success -> {
@@ -518,6 +530,7 @@ private fun CampusSyncBanner(
                 actionLabel = if (syncState.warnings.isNotEmpty()) "重试" else null,
                 onAction = if (syncState.warnings.isNotEmpty()) onRetrySync else null,
                 onDismiss = onConsumeSync,
+                modifier = modifier,
             )
             LaunchedEffect(syncState) {
                 if (syncState.warnings.isEmpty()) {
@@ -533,6 +546,7 @@ private fun CampusSyncBanner(
             actionLabel = "重试",
             onAction = onRetrySync,
             onDismiss = onConsumeSync,
+            modifier = modifier,
         )
 
         CampusSyncState.Idle, CampusSyncState.Syncing -> Unit
@@ -620,10 +634,7 @@ private fun CampusLifeContent(
 private fun CampusDomainContent(
     domain: CampusDomain,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    syncState: CampusSyncState,
     campusId: CampusID?,
-    onRetrySync: () -> Unit,
-    onConsumeSync: () -> Unit,
     onGradesClick: () -> Unit,
     onExamsClick: () -> Unit,
     onClassroomClick: () -> Unit,
@@ -662,18 +673,6 @@ private fun CampusDomainContent(
         ),
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
     ) {
-        if (domain == CampusDomain.Teaching &&
-            (syncState is CampusSyncState.Success || syncState is CampusSyncState.Error)
-        ) {
-            item {
-                CampusSyncBanner(
-                    syncState = syncState,
-                    onRetrySync = onRetrySync,
-                    onConsumeSync = onConsumeSync,
-                )
-            }
-        }
-
         if (domain == CampusDomain.Teaching) {
             item {
                 CampusToolRow(
