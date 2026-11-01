@@ -93,7 +93,7 @@ function Header() {
 }
 
 function Footer() {
-  return <footer className="site-footer"><div className="container footer-main"><div><Link className="brand" to="/"><img src="/media/optimized/app-icon.webp" width="32" height="32" alt="" />MyLeafy</Link><p>为北京林业大学学生提供的校园 App。</p></div><nav aria-label="页脚导航"><Link to="/features">探索功能</Link><Link to="/support">技术支持</Link><Link to="/privacy">隐私政策</Link><a href={`mailto:${supportEmail}`}>联系我们</a></nav></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} MyLeafy</span><span>支持 iOS 与 Android</span></div></footer>;
+  return <footer className="site-footer"><div className="container footer-main"><div><Link className="brand" to="/"><img src="/media/optimized/app-icon.webp" width="32" height="32" alt="" />MyLeafy</Link><p>为北京林业大学学生提供的校园 App。</p></div><nav aria-label="页脚导航"><Link to="/features">探索功能</Link><Link to="/support">技术支持</Link><Link to="/privacy">隐私政策</Link><a href={`mailto:${supportEmail}`}>联系我们</a></nav></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} MyLeafy</span><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">桂ICP备2024050172号-4</a><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">App 备案：桂ICP备2024050172号-5A</a><span>支持 iOS 与 Android</span></div></footer>;
 }
 
 export function PublicSite() {
