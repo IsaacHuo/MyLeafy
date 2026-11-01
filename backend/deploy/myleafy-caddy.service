@@ -6,6 +6,7 @@ Wants=network-online.target
 User=caddy
 Group=caddy
 Environment=HOME=/var/lib/caddy
+Environment=GODEBUG=http2client=0
 ExecStart=/usr/local/bin/caddy run --config /etc/myleafy/Caddyfile --adapter caddyfile
 ExecReload=/usr/local/bin/caddy reload --config /etc/myleafy/Caddyfile --adapter caddyfile
 Restart=on-failure

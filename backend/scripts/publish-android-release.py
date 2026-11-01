@@ -1,4 +1,4 @@
-"""Publish one verified signed artifact to GitHub and Cloudflare; safe to resume a partial run."""
+"""Publish one verified signed artifact to GitHub and MyLeafy; safe to resume a partial run."""
 import argparse
 import hashlib
 import json
@@ -105,7 +105,7 @@ def publish(apk: Path, manifest: Path, origin: str, operation: str):
         request(f'{origin}/v1/releases/artifacts/{key}?operation={urllib.parse.quote(operation)}', 'PUT', data, token,
                 {'Content-Type':'application/octet-stream', 'Content-Length':str(len(data)), 'X-Artifact-SHA256':digest(path)})
         received = request(f'{download_origin}/{key}')
-        assert len(received) == len(data) and hashlib.sha256(received).hexdigest() == digest(path), f'Cloudflare readback mismatch: {path.name}'
+        assert len(received) == len(data) and hashlib.sha256(received).hexdigest() == digest(path), f'MyLeafy download readback mismatch: {path.name}'
     opened = False
     try:
         if release['draft']:
@@ -128,7 +128,7 @@ def publish(apk: Path, manifest: Path, origin: str, operation: str):
     published = json.loads(gh('api', f"repos/{repository}/releases/{release['id']}"))
     latest = json.loads(request(f"{origin}/v1/releases/android/latest?package={info['packageName']}"))['release']
     assert not published['draft'] and latest['versionCode'] == info['versionCode'] and latest['sha256'] == info['sha256']
-    print(f"Published {tag}: Cloudflare and GitHub verified identical APK ({info['sha256']}).")
+    print(f"Published {tag}: MyLeafy and GitHub verified identical APK ({info['sha256']}).")
 
 
 if __name__ == '__main__':

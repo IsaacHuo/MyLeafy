@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Android-10%2B-3DDC84?logo=android" alt="Android 10+">
   <img src="https://img.shields.io/badge/Swift-5.x-F05138?logo=swift&logoColor=white" alt="Swift 5.x">
   <img src="https://img.shields.io/badge/UI-SwiftUI-0A84FF" alt="SwiftUI">
-  <img src="https://img.shields.io/badge/backend-Cloudflare-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare">
+  <img src="https://img.shields.io/badge/backend-Node.js%2024-339933?logo=nodedotjs&logoColor=white" alt="Node.js 24 on Alibaba Cloud ECS">
   <img src="https://img.shields.io/badge/license-Apache--2.0-555555" alt="Apache-2.0">
 </p>
 
@@ -25,7 +25,7 @@
 
 MyLeafy 以课表和学业数据为核心，提供教务查询、个人记录、校园社区与共享课表。iOS 与 Android 均使用课表、校园、我的三个根 Tab，校园内包含社区、日迹和学校教学。两端独立发版，功能范围、验证证据和平台差异见[跨端状态](state/PLATFORMS.md)。
 
-学校教务是课表、成绩等学校数据的权威来源；个人记录按校园身份本地保存。新版双端业务访问 Cloudflare，已安装旧版使用的 Supabase 服务继续保留。iOS 可主动开启限定范围的 iCloud 同步，实际生产与双设备验收单独记录；不代表 Android 已有同等云同步。
+学校教务是课表、成绩等学校数据的权威来源；个人记录按校园身份本地保存。新版双端业务访问阿里云 ECS 上的 MyLeafy API，已安装旧版使用的 Supabase 服务继续保留。iOS 可主动开启限定范围的 iCloud 同步，实际生产与双设备验收单独记录；不代表 Android 已有同等云同步。
 
 > 仓库名、Xcode target 与部分内部类型仍使用 `leafy` / `Leafy`。对外产品名称统一为 **MyLeafy**。
 
@@ -46,7 +46,7 @@ flowchart LR
     end
 
     School["学校教务系统<br/>身份 · 课表 · 成绩 · 考试"]
-    Backend["Cloudflare 业务后端<br/>Workers · D1 · R2 · Better Auth"]
+    Backend["阿里云 ECS 业务后端<br/>Node · SQLite · 文件 · Better Auth"]
 
     Student -->|日常学习与校园任务| IOS
     Student --> Android
@@ -91,8 +91,8 @@ MyLeafy 采用双端原生界面、边界清晰和本地可用的工程策略：
 - 教务数据通过 `URLSession`、显式 Cookie 管理和 SwiftSoup 解析；课表链路在必要时使用 `WKWebView` 复现浏览器路径。
 - SwiftData 保存课表、成绩、按校园身份隔离的随记与个人日程等用户侧本地数据；页面通过预计算投影与展示数据降低复杂网格的渲染成本。
 - Android 使用 Compose / Material 3、Room、DataStore、OkHttp 和 jsoup，保持平台交互及身份作用域。
-- Cloudflare Workers、D1、R2、Durable Objects 与 Better Auth 承载非教务业务；服务端统一校验会话、校园范围和资源所有权，关联写入使用原子事务。
-- Web 运营后台通过 Cloudflare Pages Functions 代理管理请求，通过私有服务绑定连接 Worker，管理会话不暴露给浏览器 JavaScript。
+- Node 24、Hono、SQLite、本地文件、WebSocket 与 Better Auth 在 ECS 承载非教务业务；服务端统一校验会话、校园范围和资源所有权，关联写入使用原子事务。
+- Caddy 托管网站，Node 提供同域管理/分享/发行代理，内部管理处理器不暴露为公共路由；管理会话使用 HttpOnly Cookie。
 
 详细边界、数据流和依赖方向见[当前架构](state/ARCHITECTURE.md)。
 
@@ -106,9 +106,9 @@ MyLeafy 采用双端原生界面、边界清晰和本地可用的工程策略：
 | 教务网络 | URLSession、HTTPCookieStorage、WKWebView |
 | HTML 解析 | SwiftSoup |
 | 系统服务 | WeatherKit、WidgetKit、Keychain |
-| 业务后端 | Cloudflare Workers、D1、R2、Durable Objects、Better Auth；Resend 验证邮件 |
+| 业务后端 | ECS、Node 24、Hono、SQLite、文件与 WebSocket、Better Auth；Resend 验证邮件 |
 | Web 后台 | React 18、Tailwind/Radix、TanStack Query/Table、React Hook Form、ECharts、Vite、TypeScript |
-| 边缘代理 | Cloudflare Pages Functions |
+| 网关与代理 | Caddy HTTPS、Node 同域代理 |
 | 自动化检查 | GitHub Actions、Vitest、Playwright、XCTest |
 
 ## 仓库结构
@@ -119,16 +119,16 @@ leafy/
 │   ├── App/                # 应用启动、根导航、主题与生命周期
 │   ├── Core/               # 依赖、持久化、校园能力、并发等基础设施
 │   ├── Features/           # Auth、Timetable、Community、Schedule、Discover、Profile
-│   ├── Services/           # 教务、Cloudflare、同步与诊断服务
+│   ├── Services/           # 教务、MyLeafy API、同步与诊断服务
 │   ├── Parsers/            # 教务 HTML 解析
 │   └── Shared/             # 跨功能模型与共享组件
 ├── leafyTests/             # iOS 单元与契约测试
 ├── leafyWidget/            # Widget 扩展
 ├── LeafyShareExtension/    # 系统分享扩展
 ├── android/                # Kotlin / Compose 原生客户端
-├── backend/                # Workers API、D1 migrations、业务测试与迁移工具
+├── backend/                # Node API、SQLite migrations、业务测试与迁移工具
 ├── supabase/               # 旧版服务与迁移源，仍保留运行
-├── site/                   # 官网、运营后台与 Cloudflare Functions
+├── site/                   # 官网、运营后台与同域代理处理器
 ├── Config/                 # 可提交的配置模板；本地密钥文件不入库
 ├── docs/                   # 产品、设计、工程与运维文档（设计与规划）
 ├── state/                  # 当前真实状态：进度与架构（CURRENT / ARCHITECTURE）
@@ -141,9 +141,9 @@ leafy/
 
 - macOS 与 Xcode 26 或更新版本（项目引用 iOS 26 SDK API，并为 iOS 17–25 提供运行时回退）
 - iOS 17.0 或更新版本的模拟器/设备
-- Node.js 与 npm：以各工作流和锁文件为准；当前后端 CI 使用 Node 25.6.1，网站 CI 使用 Node 22.23.1
+- Node.js 与 npm：后端/ECS 使用 Node 24.22.1；网站静态 CI 版本以其工作流为准，依赖使用锁文件
 - 可用的目标学校教务账号（验证真实教务链路时需要）
-- 可用的 Cloudflare API 环境（验证社区、共享与运营能力时需要）
+- 可用的 MyLeafy staging API（验证社区、共享与运营能力时需要）
 
 ### iOS App
 
@@ -171,17 +171,11 @@ npm ci
 npm run dev
 ```
 
-`npm run dev` 适合开发公开网站或使用 mock API 调试后台界面。包含 Cloudflare Pages Functions 的真实代理链路使用：
+`npm run dev` 适合公开页面或 mock API 下的后台开发。实际同域代理由 Node 后端提供，私有/公开 staging 的配置见 [ECS 交付](docs/operations/ecs-delivery.md)；网站职责见 [site/README.md](site/README.md)。
 
-```bash
-npm run dev:pages
-```
+### ECS 后端
 
-环境变量与安全边界见[运营后台](docs/engineering/admin-console.md)。
-
-### Cloudflare 后端
-
-`backend/` 提供 `/v1` 业务 API、D1 迁移、文件校验与持久化清理任务。客户端只访问 Worker，由 Worker 访问数据库与私有 R2。
+`backend/` 提供 `/v1` 业务 API、SQLite 迁移、文件校验、WebSocket 与持久化清理任务。Caddy 提供 HTTPS 和静态网站，管理处理器只经同域代理调用。
 
 ```bash
 cd backend
@@ -189,12 +183,12 @@ npm ci
 npm run typecheck
 npm run check:contracts
 npm test
-npx wrangler deploy --env staging --dry-run
+npm run build
 ```
 
-实际部署前配置隔离的 D1、R2、域名及 Worker Secrets；见 [Cloudflare 迁移与部署](docs/engineering/cloudflare-migration.md)。生产库已有用户写入，禁止重放旧快照覆盖。Pages 通过服务绑定连接 Worker，部署说明见 [site/README.md](site/README.md)。
+运行需要隔离的数据库、对象目录及受保护环境文件；正式部署消费已验收的同一产物，并保留 production 所有者审批。见 [ECS 交付与恢复](docs/operations/ecs-delivery.md)。服务器配置及换机手册在 [Configuration/myleafy-ecs](https://github.com/IsaacHuo/Configuration/tree/main/myleafy-ecs)，密钥和数据备份独立保存。
 
-`supabase/` 继续保留旧版服务和迁移源；其中的命令不适用于新 Cloudflare 环境。迁移工具、旧身份序列化标记中保留 Supabase 名称，不代表新版仍使用其 SDK。
+`supabase/` 继续服务已安装旧客户端；其命令不适用于当前 ECS。部分客户端内部类型/路径保留 Cloudflare 名称，现网服务由 ECS 提供。旧 Cloudflare 源已冻结保留，不再执行原部署流程。
 
 ## 文档
 
@@ -207,7 +201,7 @@ npx wrangler deploy --env staging --dry-run
 | [当前架构](state/ARCHITECTURE.md) | 各端开发者 | 当前分层、依赖、教务链路、本地存储与系统边界 |
 | [App 产品设计](docs/design/app-design.md) | 产品与客户端开发者 | 信息架构、核心流程、页面状态与产品原则 |
 | [UI 风格规范](docs/design/ui-style-guide.md) | 设计与客户端开发者 | 设计令牌、组件、可访问性与页面模式 |
-| [Cloudflare 后端](docs/engineering/cloudflare-migration.md) | 后端与客户端开发者 | API、认证、存储、迁移与验证边界 |
+| [ECS 后端](docs/engineering/aliyun-ecs-migration.md) | 后端与客户端开发者 | API、认证、存储、迁移与验证边界 |
 | [旧 Supabase 服务](docs/engineering/supabase.md) | 旧服务维护者 | 旧版服务与迁移源说明 |
 | [运营后台](docs/engineering/admin-console.md) | Web/后端开发者 | 管理架构、角色、安全、资源与开发验证 |
 | [贡献规范](CONTRIBUTING.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
@@ -218,7 +212,7 @@ npx wrangler deploy --env staging --dry-run
 
 - 教务系统不是稳定 API。页面结构、登录流程或网络策略变化可能使解析暂时失效。
 - 当前教务身份绑定由 App 在登录成功后发起；它不等同于服务端对学校身份进行独立证明。
-- 社区、评价和共享能力依赖正确部署的 Worker、D1 schema、R2 与服务端权限检查。
+- 社区、评价和共享能力依赖正确部署的 ECS API、SQLite schema、对象目录与服务端权限检查。
 - 教师与课程等目录型数据需要经过可信来源整理或后台审核，仓库不会自动保证数据完整性。
 - 这是持续演进中的校园产品，内部数据模型与未稳定接口可能变化。
 

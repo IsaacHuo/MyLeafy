@@ -1,6 +1,12 @@
 # ECS 交付与迁移操作
 
-设计、数据门槛与边界见 [迁移说明](../engineering/aliyun-ecs-migration.md)。当前是否已上线以 CURRENT 和实际部署报告为准。
+设计、数据门槛与边界见 [迁移说明](../engineering/aliyun-ecs-migration.md)。2026-11-02 已完成生产切换，来源与验收以 CURRENT 和实际部署报告为准。
+
+## 当前生产交付
+
+运行提交 `f544392b7ded8fd0b3fe59fadedeaf949c6994a5`，成功 staging [41319033640](https://github.com/IsaacHuo/MyLeafy/actions/runs/41319033640)、所有者批准的 production [41323260270](https://github.com/IsaacHuo/MyLeafy/actions/runs/41323260270)。七个服务域名直连 `8.141.82.15`，HTTPS 校验通过，原业务/发行控制策略已恢复。所有者确认现有 App 和网站正常；原 code 12 APK 5,860,825 字节完整下载及 Range/哈希验证通过，未重建或签名。
+
+迁移后生产备份 SHA-256 `323e08b85890b75dfba57eb6394832df62cb20fa9f22b40f4af4808d96e6812a` 已下载至 Mac 并恢复校验 71 表、499 对象。本机长期恢复包位于 `~/MyLeafy-Server-Backups/2026-11-02/`，密钥独立保存在受保护位置。可移植配置与换机手册见 [Configuration/myleafy-ecs](https://github.com/IsaacHuo/Configuration/tree/main/myleafy-ecs)。
 
 ## 目录与配置
 
@@ -11,6 +17,10 @@
 - `/var/backups/myleafy/<environment>`：加密快照及 tar / SHA-256；备份不是公开网站文件。
 
 bootstrap 只安装 Node 24.22.1、Caddy 2.11.7、系统用户和目录；不启动公网入口，不覆盖已存在配置。Node 使用 SHA-256，Caddy 官方清单使用 SHA-512，失败即停止。私有 Caddy 配置只监听 127.0.0.1:8081，另保存为 `/etc/myleafy/Caddyfile.private`。公开配置须备案后启用，继续导入该私有入口用于后续受控验收；公开 staging 启用时将其 SITE_ORIGIN 改为 https://staging.myleafy.space。www 跳转主域，下载域名继续服务原 APK。
+
+北京 ECS 实测 Node 默认地址族连接尝试会过早放弃可达的邮件端点；受保护环境配置使用 `NODE_OPTIONS=--network-family-autoselection-attempt-timeout=2000`，运行参数样例保持一致。该设置不固定远端 IP、不关闭证书验证，也不自动重发邮件。2026-11-01 同步新 publisher token 时通过标准输入更新仓库 Secret，服务器值与本机待上线配置一致；候选与正式 APK 均未重建或重签名。
+
+Caddy 的出站 ACME HTTP/2 曾连续等待响应超时；当前 systemd 设置 `GODEBUG=http2client=0`，仅调整出站客户端协议，入站 HTTPS/HTTP2 与证书验证保留。七个证书实际签发并通过公网校验，自动续期使用同一参数。[Go 参数说明](https://pkg.go.dev/net/http)
 
 ## 数据操作（仓库根目录）
 

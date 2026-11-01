@@ -2,12 +2,26 @@
 
 跟踪 [#53](https://github.com/IsaacHuo/MyLeafy/issues/53)。所有者确认迁移整套 Cloudflare 服务，允许维护中断，旧 Supabase 保留。后续补充要求包括权威 DNS。所有者于 2026-10-26 明确暂缓支持邮箱迁移，当前先完成官网、API、文件、数据库及发布链路，Cloudflare 邮件转发作为单独保留项。
 
+## 2026-11-02 最终切换结果
+
+所有者确认网站 `桂ICP备2024050172号-4` 和 App `桂ICP备2024050172号-5A`，网站页脚已展示并链接工信部查询入口。`f544392` 的完整 staging [41319033640](https://github.com/IsaacHuo/MyLeafy/actions/runs/41319033640) 已通过；运行产物和后续操作者工具修复提交分开记录。
+
+生产/测试 Worker 已切为全入口维护版本，所有普通表的写入冻结生效，原四项 Cron 已停用。生产最终一致快照为 72 张普通表（含专用冻结表）、98,724 行、481 个媒体与 18 个发行对象；加密归档 342,835,200 字节，SHA-256 `74307b1b00e1e94b743b8137fb3dfdb29b257d503b024cc85956a66cb3d11bb1`。Mac 和 ECS 均已恢复并完成逐表/逐对象、外键、搜索与引用校验；源对象清单在导出前后完全一致。恢复后只移除专用冻结机制，保留源端冻结。测试端已换入最终数据并通过 12 项真实检查，原 ECS 测试数据及加密备份仍保留。
+
+[生产工作流 41323260270](https://github.com/IsaacHuo/MyLeafy/actions/runs/41323260270) 经所有者批准后成功，运行源码 `f544392`。生产迁移应用尚未部署的 `0015_timetable_calendar.sql`，业务/发行已恢复原可写策略。阿里云导入 19 条记录，七条业务 A 指向 `8.141.82.15`，五项原 Worker/Pages/R2 域名绑定已解除；旧 Cloudflare 三个部署/恢复工作流已禁用。七个 HTTPS 证书通过验证，八项公网只读检查与 www 路径/查询保留检查通过，所有者确认现有 App 和网站正常。
+
+旧正式 APK 1.2.8/code 12（5,860,825 字节）公网完整下载、SHA-256 与 Range 检查通过，实际约 13 秒，没有重建、重签名或触发新发行。原认证/媒体密钥及发布凭据已核对，publisher token 与仓库 Secret 一致。迁移后生产加密备份 342,261,760 字节，SHA-256 `323e08b85890b75dfba57eb6394832df62cb20fa9f22b40f4af4808d96e6812a`，已下载 Mac 并恢复验证 71 张普通表和 499 对象。服务器配置、去凭据模板及换机手册另存 [Configuration](https://github.com/IsaacHuo/Configuration/tree/main/myleafy-ecs)；加密数据和密钥分别单独保管。
+
+源数据至少保留至切换成功后七天，再另行确认清退；邮箱转发/Zone 与旧 Supabase 不在本次清退范围。Node 连接尝试时间和 Caddy ACME 出站 HTTP/1.1 参数均有实际故障及恢复验证，未降低 TLS 证书检查。
+
+源 Cron 已单独清空；如在目标从未开放业务写入时恢复旧端，除 `recover-source.mjs` 外，还须从受保护的 `source-schedules-before.json` 恢复原 Cron，再分别恢复域名绑定和 DNS。目标已接收新写入后，仍必须先保护新数据，禁止只切回旧库。
+
 ## 目标与边界
 
 - 北京 ECS：Ubuntu 24.04 x64、2 vCPU / 2 GiB、40 GiB 磁盘、3 Mbps。2026-10-26 只读核验剩余约 31 GiB，现有服务不占用网站端口。
 - `myleafy.space` 提供官网，`www.myleafy.space` 永久重定向至同一官网并保留路径；`api.myleafy.space` 提供 `/v1`。保留原下载域名，避免已安装 Android 的发行链接失效。
 - Node 24 LTS / Hono / Better Auth / better-sqlite3 / 本地对象目录 / WebSocket / node-cron；单进程、systemd，Caddy 提供入口。无数据库协议转换、双写或增量同步。
-- 源码、服务部署、备案、DNS 切换和客户端验收分别记录。当前 Cloudflare 数据库仍是数据权威；2026-10-26 公共解析器已见阿里云 NS、无 A 记录，本机缓存仍见 Cloudflare。阿里云域名实名认证及域名核验均为 SUCCEED，解析记录尚未补齐，不能把此文当作已迁移证明。
+- 源码、服务部署、备案、DNS 切换和客户端验收分别记录。迁移准备时 Cloudflare 数据库仍是数据权威；2026-10-26 公共解析器已见阿里云 NS、无 A 记录，本机缓存仍见 Cloudflare。阿里云域名实名认证及域名核验均为 SUCCEED，解析记录尚未补齐，不能把此文当作已迁移证明。
 
 ## 运行与契约
 
@@ -33,7 +47,7 @@ SQLite 使用 WAL、外键约束与同步立即事务；业务批次和授权断
 
 旧 Cloudflare 数据至少保留 7 天，清退需另行确认。新源码禁止执行旧 Cloudflare 发布脚本；源恢复应使用迁移前记录的源码/版本，不将 ECS 代码误发到 Worker。当前非邮件迁移的验收覆盖运行、存储、下载、网站/API DNS 和 CI 发布凭据。`support@myleafy.space` 的 Cloudflare 邮件转发、对应 MX/SPF/DKIM 与 Zone 暂不退役，不阻塞其他服务；不能因此宣称所有 Cloudflare 服务均已停用。验证码发信继续使用现有 Resend，不在本次暂缓范围内。
 
-## 本轮证据与未完成项（2026-10-26）
+## 迁移准备阶段证据（2026-10-26，历史记录）
 
 生产演练包含 71 表、483 个媒体对象和 18 个发行对象，逐表恢复、外键、搜索、自增序列、对象哈希及数据库附件/发行引用校验通过；演练标记非一致，不能用于正式切换。ECS 私有实例通过 12 项真实 HTTP/WebSocket 检查，已演练每日备份停止/恢复服务；测试与生产 Secret 不混用。
 
