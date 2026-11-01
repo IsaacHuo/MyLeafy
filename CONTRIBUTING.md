@@ -32,11 +32,11 @@ MyLeafy 使用一个 Monorepo、`main + codex/*` 短期分支和统一 `CI resul
 | 仓库 | 私有文件/密钥、分层、diff、CI 选择及结果门禁测试 | 同样检查 |
 | iOS | SwiftFormat、项目/plist/entitlements；Xcode 27.1 工具链 | iOS 17 最低目标 build-for-testing 一次，再 test-without-building；同 DerivedData/编译参数，离线 XCTest 及 xcresult |
 | Android | Spotless / ktlint | Debug/JVM/Lint、release 编译/Lint、Roborazzi 与 API 36 原生设备回归 |
-| Backend | TypeScript 类型、客户端契约 | 业务、迁移、发行脚本与 Worker dry-run |
+| Backend | TypeScript 类型、客户端契约 | 业务、迁移、发行脚本与 Node 运行包构建 |
 | 官网/admin | TypeScript 类型 | 单元、生产构建、Chromium/WebKit/iPad WebKit |
 | 旧 Supabase | Deno 静态检查 | Edge Functions 与本地数据库迁移/权限 |
 
-Full validation 只用 workflow_dispatch，选择平台或 all（默认），固定验证该次事件的源码 SHA，不发布、不作为日常必需检查，不安排夜间任务。Android 候选和 Cloudflare staging 也只手动触发；候选保留正式包构建验证，staging 前置完整后端/网站验证。生产审批和同提交/同产物规则保持。发布前运行相关平台完整验证并保留实际证据；快速 CI 不代替这一步。
+Full validation 只用 workflow_dispatch，选择平台或 all（默认），固定验证该次事件的源码 SHA，不发布、不作为日常必需检查，不安排夜间任务。Android 候选和 ECS staging 也只手动触发；候选保留正式包构建验证，staging 前置完整后端/网站验证。生产审批和同提交/同产物规则保持。发布前运行相关平台完整验证并保留实际证据；快速 CI 不代替这一步。
 
 测试代码存在、测试编译成功、测试执行通过要分别表述；本地、CI、Simulator、真机和真实学校会话各自标明。自动测试使用合成数据和离线样本，不依赖学生账号、验证码或校园网。真机覆盖升级和产品交互按发布清单人工验收。
 
@@ -53,4 +53,4 @@ Full validation 只用 workflow_dispatch，选择平台或 all（默认），固
 
 [交付手册](docs/operations/delivery.md) 集中维护发布步骤与验收短清单，[发布索引](docs/operations/release-notes.md) 记录版本/build、源码、tag、产物或商店证据及验收边界，GitHub Release 保存对外说明和产物。
 
-Android 继续使用私有候选与管理员授权，发布同一 APK；iOS 继续使用 Xcode / App Store Connect，Apple 发布后再记录源码；Cloudflare 生产部署仍需所有者批准。CI 通过、合入 main 或更新源码版本都不会自动代表正式发布。
+Android 继续使用私有候选与管理员授权，发布同一 APK；iOS 继续使用 Xcode / App Store Connect，Apple 发布后再记录源码；ECS 生产部署仍需所有者批准。CI 通过、合入 main 或更新源码版本都不会自动代表正式发布。

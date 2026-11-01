@@ -1,6 +1,6 @@
 # AGENTS.md
 
-MyLeafy 是 iOS、Android、Cloudflare 后端与官网/运营后台共用的 Monorepo。两端共享业务语义与协议，保留平台交互差异，独立验证和发版。
+MyLeafy 是 iOS、Android、ECS 后端与官网/运营后台共用的 Monorepo。两端共享业务语义与协议，保留平台交互差异，独立验证和发版。
 
 ## 仓库知识与任务入口
 
@@ -35,7 +35,7 @@ MyLeafy 是 iOS、Android、Cloudflare 后端与官网/运营后台共用的 Mon
 |---|---|
 | iOS | SwiftUI / SwiftData / URLSession / SPM，最低 iOS 17；iOS 26+ 按可用性采用 Liquid Glass；先检查现有 SwiftUI 模式 |
 | Android | Kotlin / Compose / Room / DataStore / OkHttp，最低 API 29；保留 features / core 分层及原生交互 |
-| Backend | Cloudflare Workers / D1 / R2 / Durable Objects / Better Auth；共享契约在 contracts；旧 Supabase 仍服务已安装旧客户端 |
+| Backend | Node 24 / Hono / SQLite / 本地文件 / WebSocket / Better Auth，由 ECS systemd/Caddy 承载；共享契约在 contracts；旧 Supabase 仍服务已安装旧客户端 |
 | 官网/admin | React / TypeScript / Tailwind / Radix / TanStack Query、Table / React Hook Form；管理授权在服务端 |
 
 校园能力决定入口；学校数据、MyLeafy 服务端数据与用户本地数据不得混淆权威来源。共享协议或 fixtures 改动必须检查所有受影响端，不根据开发进度差异降低契约验证要求。
@@ -74,6 +74,6 @@ Issue 的 Done 表示该 Issue 定义的验收条件已满足；代码合入后�
 
 - Android：main 基础 CI 通过后手动准备私有正式签名候选；超级管理员在 Android 版本页下载、覆盖升级验收后授权正式发布，复用同一 APK。
 - iOS：Xcode Archive → TestFlight / App Store Connect；Apple 正式发布后运行 **Record released iOS version** 记录已发布二进制对应的源码、version/build 和不可变 tag。
-- Cloudflare：staging 验收指定提交，production 需要所有者在 GitHub Actions 批准。代码恢复与数据库恢复分别决定。
+- ECS：staging 验收指定提交，production 消费同一产物并需要所有者在 GitHub Actions 批准。代码恢复与数据库恢复分别决定；旧 Cloudflare 保留源不与 ECS 双写。
 
 [交付手册](docs/operations/delivery.md) 是发布操作和短清单入口，[发布索引](docs/operations/release-notes.md) 保存已核实的发行证据。不要推断缺失的源码、build 或真机结果，不移动正式 tag，不把当前源码版本当成已发布版本。
