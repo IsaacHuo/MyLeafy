@@ -5,87 +5,127 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { QueryClient, useQuery } from "@tanstack/react-query";
 import {
-  QueryClient,
-  useQuery,
-  QueryClientProvider,
-} from "@tanstack/react-query";
+  Refine,
+  useGetIdentity,
+  useLogin,
+  useLogout,
+  useInvalidateAuthStore,
+} from "@refinedev/core";
+import routerProvider from "@refinedev/react-router";
+import { App as AntApp, ConfigProvider, theme } from "antd";
+import zhCN from "antd/es/locale/zh_CN";
 import { toast, Toaster } from "sonner";
-import { authProvider } from "./authProvider";
-import { meRequest, type AdminIdentityResponse, AdminApiError } from "./client";
-import {
-  readCampusScope,
-  saveCampusScope,
-  clearIdentity,
-  saveIdentity,
-} from "./session";
+import { type AdminIdentityResponse } from "./client";
+import { readCampusScope, saveCampusScope, clearIdentity } from "./session";
 import { dataProvider } from "./dataProvider";
-const Context = createContext<{
-  identity: AdminIdentityResponse | null;
-  loading: boolean;
-  error: unknown;
-  campus: string;
-  setCampus: (value: string) => void;
-  login: (username: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-  can: (resource: string, action?: string) => boolean;
-}>({
-  identity: null,
-  loading: true,
-  error: null,
-  campus: "all",
-  setCampus: () => {},
-  login: async () => {},
-  logout: async () => {},
-  can: () => false,
-});
+import { refineAuth, refineData, refineAccess } from "./refine";
+import { resourceConfigs } from "../resources/config";
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: false, refetchOnWindowFocus: false, staleTime: 15000 },
   },
 });
+const Context = createContext<{
+  campus: string;
+  setCampus: (value: string) => void;
+  themeMode: string;
+  setThemeMode: (value: string) => void;
+}>({
+  campus: "all",
+  setCampus: () => {},
+  themeMode: "system",
+  setThemeMode: () => {},
+});
 export function AdminProviders({ children }: { children: ReactNode }) {
+  const [campus, setScope] = useState(
+    () =>
+      new URLSearchParams(window.location.search).get("campus") ??
+      readCampusScope(),
+  );
+  const [themeMode, setMode] = useState(
+    () => localStorage.getItem("leafy-admin-theme") ?? "system",
+  );
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  const dark = themeMode === "dark" || (themeMode === "system" && systemDark);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const change = () => setSystemDark(media.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
+  useEffect(() => {
+    document.body.dataset.adminTheme = dark ? "dark" : "light";
+    localStorage.setItem("leafy-admin-theme", themeMode);
+  }, [dark, themeMode]);
   return (
-    <QueryClientProvider client={queryClient}>
-      <Session>
-        {children}
-        <Toaster richColors position="bottom-right" />
-      </Session>
-    </QueryClientProvider>
+    <ConfigProvider
+      locale={zhCN}
+      button={{ autoInsertSpace: false }}
+      theme={{
+        algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: {
+          colorPrimary: "#16835b",
+          borderRadius: 8,
+          fontFamily:
+            'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        },
+        components: { Table: { cellPaddingBlock: 12 } },
+      }}
+    >
+      <AntApp>
+        <Refine
+          authProvider={refineAuth}
+          dataProvider={refineData}
+          accessControlProvider={refineAccess}
+          routerProvider={routerProvider}
+          resources={Object.entries(resourceConfigs).map(([name, config]) => ({
+            name,
+            list: `/${name}`,
+            show: `/${name}/:id`,
+            meta: { label: config.label },
+          }))}
+          options={{
+            disableTelemetry: true,
+            reactQuery: { clientConfig: queryClient },
+            syncWithLocation: false,
+            mutationMode: "pessimistic",
+          }}
+        >
+          <Context.Provider
+            value={{
+              campus,
+              setCampus: (value) => {
+                saveCampusScope(value);
+                setScope(value);
+                void queryClient.cancelQueries();
+              },
+              themeMode,
+              setThemeMode: setMode,
+            }}
+          >
+            <SessionEvents />
+            {children}
+            <Toaster richColors position="bottom-right" />
+          </Context.Provider>
+        </Refine>
+      </AntApp>
+    </ConfigProvider>
   );
 }
-function Session({ children }: { children: ReactNode }) {
-  const [identity, setIdentity] = useState<AdminIdentityResponse | null>(null),
-    [loading, setLoading] = useState(true),
-    [error, setError] = useState<unknown>(null),
-    [campus, setScope] = useState(
-      () =>
-        new URLSearchParams(window.location.search).get("campus") ??
-        readCampusScope(),
-    );
-  useEffect(() => {
-    let active = true;
-    meRequest()
-      .then((value) => {
-        if (active) {
-          saveIdentity(value);
-          setIdentity(value);
-        }
-      })
-      .catch((err) => {
-        if (active && (!(err instanceof AdminApiError) || err.status !== 401))
-          setError(err);
-      })
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, []);
+function SessionEvents() {
+  const invalidate = useInvalidateAuthStore();
   useEffect(() => {
     const expire = () => {
       clearIdentity();
-      setIdentity(null);
-      queryClient.clear();
+      queryClient.removeQueries({
+        predicate: (q) => q.queryKey[0] === "admin",
+      });
+      void invalidate();
     };
     const warning = (e: Event) =>
       toast.warning(
@@ -97,45 +137,41 @@ function Session({ children }: { children: ReactNode }) {
       window.removeEventListener("leafy-admin-session-expired", expire);
       window.removeEventListener("leafy-admin-audit-warning", warning);
     };
-  }, []);
-  const setCampus = (value: string) => {
-    saveCampusScope(value);
-    setScope(value);
-    void queryClient.cancelQueries({ queryKey: ["admin"] });
-  };
-  return (
-    <Context.Provider
-      value={{
-        identity,
-        loading,
-        error,
-        campus,
-        setCampus,
-        login: async (username, password) => {
-          await authProvider.login({ username, password });
-          const value = await meRequest();
-          saveIdentity(value);
-          setIdentity(value);
-          setError(null);
-        },
-        logout: async () => {
-          await authProvider.logout();
-          setIdentity(null);
-          queryClient.clear();
-        },
-        can: (resource, action = "list") =>
-          identity?.permissions.some(
-            (p) =>
-              p.resource === resource &&
-              (p.actions.includes(action) || p.actions.includes("*")),
-          ) ?? false,
-      }}
-    >
-      {children}
-    </Context.Provider>
-  );
+  }, [invalidate]);
+  return null;
 }
-export const useAdmin = () => useContext(Context);
+export function useAdmin() {
+  const context = useContext(Context),
+    identity = useGetIdentity<AdminIdentityResponse | null>(),
+    login = useLogin<{ username: string; password: string }>(),
+    logout = useLogout(),
+    invalidate = useInvalidateAuthStore();
+  return {
+    ...context,
+    identity: identity.data ?? null,
+    loading: identity.isLoading,
+    error: identity.error,
+    login: async (username: string, password: string) => {
+      const result = await login.mutateAsync({ username, password });
+      if (!result.success) throw result.error ?? new Error("登录失败");
+      await invalidate();
+    },
+    logout: async () => {
+      const result = await logout.mutateAsync({});
+      if (!result.success) throw result.error ?? new Error("退出失败");
+      queryClient.removeQueries({
+        predicate: (q) => q.queryKey[0] === "admin",
+      });
+      await invalidate();
+    },
+    can: (resource: string, action = "list") =>
+      identity.data?.permissions.some(
+        (p) =>
+          p.resource === resource &&
+          (p.actions.includes(action) || p.actions.includes("*")),
+      ) ?? false,
+  };
+}
 export function useAction<T = Record<string, any>>(
   action: string,
   params: Record<string, unknown> = {},

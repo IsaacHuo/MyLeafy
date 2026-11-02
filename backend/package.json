@@ -12,7 +12,7 @@
     "schema:replay": "tsx scripts/replay-source.ts",
     "schema:convert": "tsx scripts/convert-schema.ts",
     "check:contracts": "tsx scripts/check-client-contracts.ts",
-    "build": "esbuild src/node.ts --bundle --platform=node --format=esm --packages=external --target=node24 --outfile=dist/server.mjs && esbuild scripts/ecs/restore.ts --bundle --platform=node --format=esm --packages=external --target=node24 --outfile=dist/restore.mjs",
+    "build": "esbuild src/node.ts --bundle --platform=node --format=esm --packages=external --target=node24 --outfile=dist/server.mjs && esbuild src/monitor.ts --bundle --platform=node --format=esm --packages=external --target=node24 --outfile=dist/monitor.mjs && esbuild scripts/ecs/restore.ts --bundle --platform=node --format=esm --packages=external --target=node24 --outfile=dist/restore.mjs",
     "start": "node dist/server.mjs"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "better-sqlite3": "12.11.1",
     "hono": "4.13.14",
     "node-cron": "4.6.0",
+    "prom-client": "^15.1.2",
     "ws": "8.22.0"
   },
   "devDependencies": {

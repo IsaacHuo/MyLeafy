@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { hash } from 'bcryptjs';
 import { TestDatabase } from './sqlite-local';
 import type { BackendEnv } from '../src/auth';
@@ -12,7 +12,7 @@ import { announcement, deleteRating, pinPost, resolveModerationReport, revokeAdm
 import { moderate } from '../src/admin-write';
 
 const databases:TestDatabase[]=[];
-afterEach(()=>{for(const db of databases.splice(0))db.close();});
+afterEach(()=>{for(const db of databases.splice(0))db.close();vi.restoreAllMocks();});
 async function fixture(role='super_admin'){
   const db=new TestDatabase();databases.push(db);db.sqlite.exec("UPDATE backend_control SET mode='active'");
   const id=crypto.randomUUID();
@@ -21,6 +21,17 @@ async function fixture(role='super_admin'){
   const login=(password='test-password-only')=>new Request('https://admin.internal/login',{method:'POST',headers:{'Content-Type':'application/json','x-leafy-client-ip':'192.0.2.1'},body:JSON.stringify({username:'test-admin',password})});
   return {db,env,id,login};
 }
+it('monitoring denies viewers with an audit receipt and does not audit each permitted poll',async()=>{
+  const denied=await fixture('viewer'),signed=await adminLogin(denied.env,denied.login());
+  const request=(token:string)=>new Request('https://binding.internal/admin/actions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({action:'monitoringOverview',params:{}})});
+  expect((await handleAdminRequest(request(signed.token),denied.env)).status).toBe(403);
+  expect(denied.db.sqlite.prepare("SELECT outcome,error_code FROM admin_audit_logs WHERE target_type='monitoring'").get()).toMatchObject({outcome:'failure',error_code:'forbidden'});
+  const allowed=await fixture(),owner=await adminLogin(allowed.env,allowed.login());allowed.env.MONITOR_TOKEN='test-monitor-token-at-least-32-characters';
+  const fetcher=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>Response.json({environment:'staging',coverage:{stale:false}}));
+  const before=allowed.db.sqlite.prepare('SELECT count(*) AS n FROM admin_audit_logs').get()!.n;
+  for(let i=0;i<10;i++)expect((await handleAdminRequest(request(owner.token),allowed.env)).status).toBe(200);
+  expect(fetcher).toHaveBeenCalledTimes(10);expect(allowed.db.sqlite.prepare('SELECT count(*) AS n FROM admin_audit_logs').get()!.n).toBe(before);
+});
 it('migrated bcrypt admin credentials work and private fields are never returned',async()=>{
   const {env,login}=await fixture();
   const result=await adminLogin(env,login());expect(result.admin).not.toHaveProperty('password_hash');

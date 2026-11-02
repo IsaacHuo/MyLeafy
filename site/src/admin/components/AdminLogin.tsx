@@ -1,53 +1,63 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { Leaf, ArrowRight } from "lucide-react";
+import { Form, Input, Button, Card, Typography } from "antd";
+import { Leaf } from "lucide-react";
 import { useAdmin } from "../providers/context";
-import { Button, ErrorState } from "./ui";
+import { ErrorState } from "./ui";
 export function AdminLogin() {
   const { login } = useAdmin(),
-    [error, setError] = useState<unknown>(null);
-  const {
-    register,
-    handleSubmit,
-    formState: { isSubmitting },
-  } = useForm<{ username: string; password: string }>();
+    [error, setError] = useState<unknown>(null),
+    [busy, setBusy] = useState(false);
   return (
     <main className="studio-login">
-      <div className="studio-login-card">
-        <Leaf className="studio-brand-icon" size={28} />
-        <h1>MyLeafy</h1>
-        <p>登录运营工作台</p>
-        <form
-          onSubmit={handleSubmit(async (values) => {
+      <Card className="studio-login-card">
+        <Leaf size={32} aria-hidden />
+        <Typography.Title level={1}>MyLeafy</Typography.Title>
+        <Typography.Paragraph type="secondary">
+          登录运营工作台
+        </Typography.Paragraph>
+        <Form
+          layout="vertical"
+          onFinish={async (values: { username: string; password: string }) => {
             setError(null);
+            setBusy(true);
             try {
               await login(values.username, values.password);
-            } catch (err) {
-              setError(err);
+            } catch (error) {
+              setError(error);
+            } finally {
+              setBusy(false);
             }
-          })}
+          }}
         >
-          <label>
-            账号
-            <input autoComplete="username" required {...register("username")} />
-          </label>
-          <label>
-            密码
-            <input
-              type="password"
-              autoComplete="current-password"
-              required
-              {...register("password")}
-            />
-          </label>
+          <Form.Item
+            name="username"
+            label="账号"
+            rules={[{ required: true, message: "请输入账号" }]}
+          >
+            <Input autoComplete="username" size="large" />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label="密码"
+            rules={[{ required: true, message: "请输入密码" }]}
+          >
+            <Input.Password autoComplete="current-password" size="large" />
+          </Form.Item>
           {error != null && <ErrorState error={error} />}
-          <Button type="submit" variant="primary" disabled={isSubmitting}>
-            {isSubmitting ? "正在登录…" : "登录"}
-            <ArrowRight size={14} />
+          <Button
+            block
+            size="large"
+            htmlType="submit"
+            type="primary"
+            loading={busy}
+          >
+            登录
           </Button>
-        </form>
-        <small>受保护的 Cloudflare 管理服务</small>
-      </div>
+        </Form>
+        <Typography.Text type="secondary">
+          MyLeafy · ECS 管理服务
+        </Typography.Text>
+      </Card>
     </main>
   );
 }

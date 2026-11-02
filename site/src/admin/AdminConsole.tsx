@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AdminProviders, useAdmin } from "./providers/context";
 import { purgeLegacyAdminSession } from "./providers/session";
@@ -16,6 +16,7 @@ import {
   QualityPage,
 } from "./resources/InsightsPages";
 import "./admin.css";
+const MonitoringPage=lazy(()=>import('./monitoring/MonitoringPages').then(module=>({default:module.MonitoringPage})));
 export default function AdminConsole() {
   useEffect(() => {
     purgeLegacyAdminSession();
@@ -47,6 +48,7 @@ function ConsoleRoutes() {
       <Routes>
         <Route index element={<AdminDashboard />} />
         <Route path="manual" element={<ManualPage />} />
+        <Route path="monitoring/*" element={can('monitoring') ? <Suspense fallback={<Loading />}><MonitoringPage /></Suspense> : <Denied />} />
         <Route
           path="android-releases/*"
           element={

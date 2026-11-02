@@ -44,6 +44,9 @@ tar -xzf "$myleafy_archive" -C "$myleafy_release" --no-same-owner
 /usr/local/bin/node "$myleafy_release/backend/scripts/ecs/verify-release.mjs" "$myleafy_release" "$myleafy_commit"
 cd "$myleafy_release/backend"
 /usr/local/bin/npm ci --omit=dev --registry=https://registry.npmjs.org --no-audit --no-fund
+if [[ -f "/etc/myleafy/${myleafy_environment}.monitor.env" ]]; then
+  /usr/local/bin/node deploy/monitor-maintenance.mjs "$myleafy_environment" begin
+fi
 
 if systemctl is-active --quiet "myleafy@${myleafy_environment}"; then
   systemctl stop "myleafy@${myleafy_environment}"
@@ -67,6 +70,13 @@ mv -Tf "${myleafy_root}/current.new" "${myleafy_root}/current"
 install -m 644 deploy/myleafy@.service deploy/myleafy-backup@.service deploy/myleafy-backup@.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl start "myleafy@${myleafy_environment}"
+if [[ -f "/etc/myleafy/${myleafy_environment}.monitor.env" ]]; then
+  install -m 644 deploy/myleafy-monitor@.service deploy/myleafy-monitor-report@.service deploy/myleafy-monitor-report@.timer /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable "myleafy-monitor@${myleafy_environment}" "myleafy-monitor-report@${myleafy_environment}.timer"
+  systemctl restart "myleafy-monitor@${myleafy_environment}"
+  if [[ "$myleafy_environment" == production ]]; then systemctl start "myleafy-monitor-report@${myleafy_environment}.timer"; fi
+fi
 # A restore stays behind maintenance until its own verification is accepted.
 for myleafy_attempt in {1..20}; do
   if curl -fsS -H "Host: $myleafy_host" "http://127.0.0.1:${myleafy_port}/health" >"${myleafy_root}/health.json"; then break; fi
@@ -78,3 +88,6 @@ const [root,environment,commit,previous]=process.argv.slice(2),health=JSON.parse
 if(health.status!=='ok'||health.environment!==environment||health.commit!==commit)throw new Error('Release health identity failed; database is not automatically rolled back');
 writeFileSync(root+'/deployment.json',JSON.stringify({environment,commit,previous,success:true,checkedAt:new Date().toISOString(),checks:['artifact-sha256','release-files','database-migrations','health-commit']},null,2),{mode:0o600});
 JS
+if [[ -f "/etc/myleafy/${myleafy_environment}.monitor.env" ]]; then
+  /usr/local/bin/node deploy/monitor-maintenance.mjs "$myleafy_environment" end
+fi

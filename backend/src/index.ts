@@ -27,7 +27,8 @@ import { defer } from './runtime/background';
 
 export const app=new Hono<{Bindings:BackendEnv;Variables:{requestId:string}}>();
 app.use('*',async(c,next)=>{
-  const id=crypto.randomUUID();c.set('requestId',id);
+  const forwarded=c.req.header('x-request-id')??'';
+  const id=/^[A-Za-z0-9_-]{1,128}$/.test(forwarded)?forwarded:crypto.randomUUID();c.set('requestId',id);
   c.header('X-Request-ID',id);c.header('X-Content-Type-Options','nosniff');c.header('Cache-Control','no-store');
   const origin=c.req.header('origin');
   if(origin&&origin!==c.env.SITE_ORIGIN&&origin!==c.env.API_ORIGIN)throw new ApiError(403,'forbidden','Origin is not allowed');

@@ -1,18 +1,67 @@
 # Activate only after filing and owner acceptance. Never an automatic bootstrap step.
+{
+  metrics {
+    per_host
+  }
+}
+(monitoring) {
+  import /etc/myleafy/Caddyfile.monitoring-routes
+  map {http.request.header.User-Agent} {monitor_probe} {
+    default false
+    MyLeafy-Monitor/1 true
+  }
+  log_append probe {monitor_probe}
+  log_append route {monitor_route}
+  log_append request_id {http.request.uuid}
+  log {
+    output file /var/lib/caddy/myleafy-access/{args[0]}/access.log {
+      mode 0640
+      roll_size 16MiB
+      roll_keep 7
+      roll_keep_for 168h
+      roll_uncompressed
+    }
+    format filter {
+      wrap json
+      fields {
+        request>headers delete
+        request>uri delete
+        request>remote_port delete
+        request>tls delete
+        resp_headers delete
+        msg delete
+        err_trace delete
+        error delete
+        request>remote_ip ip_mask {
+          ipv4 24
+          ipv6 48
+        }
+        request>client_ip ip_mask {
+          ipv4 24
+          ipv6 48
+        }
+      }
+    }
+  }
+}
 (api_proxy) {
   reverse_proxy 127.0.0.1:{args[0]} {
     header_up X-Real-IP {remote_host}
+    header_up X-Request-ID {http.request.uuid}
     header_up -CF-Connecting-IP
     header_up -X-Leafy-Client-IP
   }
 }
 api.myleafy.space, downloads.myleafy.space {
+  import monitoring production
   import api_proxy 3100
 }
 api-staging.myleafy.space, downloads-staging.myleafy.space {
+  import monitoring staging
   import api_proxy 3101
 }
 myleafy.space {
+  import monitoring production
   @dynamic path /api/* /share/*
   handle @dynamic {
     import api_proxy 3100
@@ -26,6 +75,7 @@ myleafy.space {
   }
 }
 staging.myleafy.space {
+  import monitoring staging
   @dynamic path /api/* /share/*
   handle @dynamic {
     import api_proxy 3101
@@ -40,6 +90,7 @@ staging.myleafy.space {
 }
 
 www.myleafy.space {
+  import monitoring production
   redir https://myleafy.space{uri} permanent
 }
 

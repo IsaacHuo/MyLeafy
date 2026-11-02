@@ -57,6 +57,12 @@ const getOneActions: Record<string, string> = {
 };
 
 const unscopedActions = new Set([
+  "monitoringOverview",
+  "monitoringSeries",
+  "requestLogList",
+  "serviceLogList",
+  "monitoringAlerts",
+  "monitoringReports",
   "listAndroidReleases",
   "requestAndroidPublication",
   "revokeAndroidRelease",

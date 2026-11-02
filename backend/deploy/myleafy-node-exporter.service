@@ -1,0 +1,17 @@
+[Unit]
+Description=MyLeafy host metrics collector
+After=network.target
+[Service]
+User=myleafy-monitor
+Group=myleafy-monitor
+ExecStart=/usr/local/bin/myleafy-node_exporter --web.listen-address=127.0.0.1:9100 --collector.disable-defaults --collector.cpu --collector.meminfo --collector.filesystem --collector.diskstats --collector.netdev --collector.loadavg --collector.time --collector.uname --collector.stat
+Restart=on-failure
+RestartSec=5
+MemoryMax=64M
+CPUQuota=10%
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+[Install]
+WantedBy=multi-user.target

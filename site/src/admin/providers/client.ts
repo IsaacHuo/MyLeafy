@@ -154,7 +154,7 @@ async function responseError(response: Response) {
 async function adminFetch(input: RequestInfo | URL, init: RequestInit) {
   try {
     const response = await fetch(input, init);
-    if (response.status === 401)
+    if (response.status === 401 && !String(input).endsWith('/me') && !String(input).endsWith('/login'))
       window.dispatchEvent(new Event("leafy-admin-session-expired"));
     return response;
   } catch (error) {

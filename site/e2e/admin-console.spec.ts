@@ -69,6 +69,7 @@ const overview = {
   },
 };
 async function setup(page: Page, role = "super_admin") {
+  page.setDefaultTimeout(15_000);
   let loggedIn = false;
   const calls: { action: string; params: any }[] = [];
   const identity = {
@@ -350,18 +351,15 @@ async function setup(page: Page, role = "super_admin") {
   return calls;
 }
 async function navigate(page: Page, label: string) {
-  const link = page
-    .locator(".studio-sidebar nav")
-    .getByRole("link", { name: label, exact: true });
-  if (!(await link.isVisible()))
-    await page.getByRole("button", { name: "展开导航", exact: true }).click();
-  await link.click();
-  if (
-    await page
-      .getByRole("button", { name: "展开导航", exact: true })
-      .isVisible()
-  )
-    await page.getByRole("button", { name: "展开导航", exact: true }).click();
+  const sidebar=page.locator('.admin-navigation');
+  if(!await sidebar.isVisible())await page.getByRole('button', { name: '切换导航', exact: true }).click();
+  await sidebar.getByRole('link', { name: label, exact: true }).click();
+}
+async function choose(page: Page, name: string, value: string) {
+  const combobox=page.getByRole('combobox', { name, exact: true });
+  await combobox.focus();
+  await combobox.press('ArrowDown');
+  await page.locator('.ant-select-dropdown:visible').getByText(value, { exact: true }).click();
 }
 test("Studio data browsing, scopes, saved views, details and dangerous confirmations", async ({
   page,
@@ -381,7 +379,7 @@ test("Studio data browsing, scopes, saved views, details and dangerous confirmat
       () => calls.filter((c) => c.action === "listPosts").at(-1)?.params.status,
     )
     .toBe("all");
-  await page.getByLabel("学校范围").selectOption("bjfu");
+  await choose(page, '学校范围', '北京林业大学');
   await expect
     .poll(
       () =>
@@ -465,7 +463,7 @@ test("viewer retains read access and cannot manage or see system diagnostics", a
       page.getByRole("button", { name: label, exact: true }),
     ).toHaveCount(0);
   await expect(
-    page.locator(".studio-sidebar nav").getByRole("link", { name: "运行诊断" }),
+    page.locator(".admin-navigation").getByRole("link", { name: "运行诊断" }),
   ).toHaveCount(0);
   await page.goto("/admin/operations");
   await expect(page.getByRole("alert")).toContainText("无权访问");
@@ -477,7 +475,7 @@ test("every resource and diagnostics renders in light and dark themes", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   await setup(page);
   for (const theme of ["light", "dark"]) {
-    await page.getByLabel("主题", { exact: true }).selectOption(theme);
+    await choose(page, '主题', theme === 'light' ? '浅色' : '深色');
     for (const path of resources.filter((r) => r !== "dashboard")) {
       await page.goto(`/admin/${path}`);
       await expect(page.locator("main h1")).toBeVisible();

@@ -1,31 +1,36 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Dialog as Primitive, Tooltip as Tip } from "radix-ui";
-import { X, Info } from "lucide-react";
-import { cva } from "class-variance-authority";
+import {
+  Button as AntButton,
+  Modal,
+  Drawer,
+  Tag,
+  Tooltip,
+  Alert,
+  Spin,
+  Empty as AntEmpty,
+  Typography,
+} from "antd";
+import { Info } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 export const cn = (...values: Parameters<typeof clsx>) => twMerge(clsx(values));
-const variants = cva("studio-button", {
-  variants: {
-    variant: {
-      primary: "primary",
-      danger: "danger",
-      ghost: "ghost",
-      default: "",
-    },
-  },
-  defaultVariants: { variant: "default" },
-});
 export const Button = forwardRef<
   HTMLButtonElement,
-  ButtonHTMLAttributes<HTMLButtonElement> & {
+  Omit<ButtonHTMLAttributes<HTMLButtonElement>, "color"> & {
     variant?: "primary" | "danger" | "ghost" | "default";
   }
->(({ className, variant, type = "button", ...props }, ref) => (
-  <button
+>(({ variant, type = "button", ...props }, ref) => (
+  <AntButton
     ref={ref}
-    type={type}
-    className={cn(variants({ variant }), className)}
+    htmlType={type}
+    type={
+      variant === "primary"
+        ? "primary"
+        : variant === "ghost"
+          ? "text"
+          : "default"
+    }
+    danger={variant === "danger"}
     {...props}
   />
 ));
@@ -45,50 +50,34 @@ export function Dialog({
   side?: boolean;
   busy?: boolean;
 }) {
-  return (
-    <Primitive.Root
-      open={open}
-      onOpenChange={(value) => !value && !busy && onClose()}
-    >
-      <Primitive.Portal>
-        <Primitive.Overlay className="studio-overlay" />
-        <Primitive.Content
-          className={cn("studio-dialog", side && "studio-sheet")}
-          onInteractOutside={(e) => e.preventDefault()}
-          aria-describedby={undefined}
-        >
-          <header>
-            <Primitive.Title>{title}</Primitive.Title>
-            <Button
-              aria-label="关闭"
-              variant="ghost"
-              disabled={busy}
-              onClick={onClose}
-            >
-              <X size={16} />
-            </Button>
-          </header>
-          {children}
-        </Primitive.Content>
-      </Primitive.Portal>
-    </Primitive.Root>
+  const common = {
+    open,
+    title: <h2 style={{ fontSize: 18, margin: 0 }}>{title}</h2>,
+    onClose: () => {
+      if (!busy) onClose();
+    },
+    keyboard: !busy,
+    maskClosable: false,
+    destroyOnHidden: true,
+    closable: { disabled: busy, "aria-label": "关闭" },
+  };
+  return side ? (
+    <Drawer {...common} width={640}>
+      {children}
+    </Drawer>
+  ) : (
+    <Modal {...common} onCancel={common.onClose} footer={null} width={680}>
+      {children}
+    </Modal>
   );
 }
 export function Help({ children }: { children: ReactNode }) {
   return (
-    <Tip.Provider>
-      <Tip.Root>
-        <Tip.Trigger className="studio-help" aria-label="指标说明">
-          <Info size={14} />
-        </Tip.Trigger>
-        <Tip.Portal>
-          <Tip.Content className="studio-tooltip" sideOffset={6}>
-            {children}
-            <Tip.Arrow />
-          </Tip.Content>
-        </Tip.Portal>
-      </Tip.Root>
-    </Tip.Provider>
+    <Tooltip title={children}>
+      <button className="studio-help" type="button" aria-label="指标说明">
+        <Info size={14} />
+      </button>
+    </Tooltip>
   );
 }
 export function Badge({
@@ -98,7 +87,21 @@ export function Badge({
   children: ReactNode;
   tone?: string;
 }) {
-  return <span className={`studio-badge ${tone}`}>{children}</span>;
+  return (
+    <Tag
+      color={
+        tone === "success"
+          ? "success"
+          : tone === "danger"
+            ? "error"
+            : tone === "warning"
+              ? "warning"
+              : undefined
+      }
+    >
+      {children}
+    </Tag>
+  );
 }
 export function ErrorState({
   error,
@@ -108,17 +111,21 @@ export function ErrorState({
   retry?: () => void;
 }) {
   return (
-    <div className="studio-error" role="alert">
-      <strong>请求未完成</strong>
-      <p>{error instanceof Error ? error.message : String(error)}</p>
-      {retry && <Button onClick={retry}>重试</Button>}
-    </div>
+    <Alert
+      role="alert"
+      type="error"
+      showIcon
+      message="请求未完成"
+      description={error instanceof Error ? error.message : String(error)}
+      action={retry ? <AntButton onClick={retry}>重试</AntButton> : undefined}
+    />
   );
 }
 export function Loading() {
   return (
     <div role="status" className="studio-loading">
-      正在加载…
+      <Spin />
+      <span>正在加载…</span>
     </div>
   );
 }
@@ -127,7 +134,9 @@ export function Empty({
 }: {
   children?: ReactNode;
 }) {
-  return <div className="studio-empty">{children}</div>;
+  return (
+    <AntEmpty image={AntEmpty.PRESENTED_IMAGE_SIMPLE} description={children} />
+  );
 }
 export function PageHeader({
   title,
@@ -141,8 +150,12 @@ export function PageHeader({
   return (
     <div className="studio-page-header">
       <div>
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
+        <Typography.Title level={1}>{title}</Typography.Title>
+        {description && (
+          <Typography.Paragraph type="secondary">
+            {description}
+          </Typography.Paragraph>
+        )}
       </div>
       {children}
     </div>

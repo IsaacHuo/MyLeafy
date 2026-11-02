@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { adminActionNames } from "./registry";
+import baseline from '../../../docs/engineering/admin-action-baseline.json';
 
 const legacyAdminActionNames = [
   "overview",
@@ -78,6 +79,11 @@ const legacyAdminActionNames = [
 ] as const;
 
 describe("admin action registry contract", () => {
+  it('preserves all 82 accepted actions while adding the six monitoring reads',()=>{
+    expect(baseline.count).toBe(82);
+    expect(baseline.actions.every(action=>(adminActionNames as readonly string[]).includes(action))).toBe(true);
+    expect(adminActionNames).toHaveLength(88);
+  });
   it("preserves every legacy action and registers the approved additions", () => {
     expect(new Set(adminActionNames).size).toBe(adminActionNames.length);
     for (const action of [

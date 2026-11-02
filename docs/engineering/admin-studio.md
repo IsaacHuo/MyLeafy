@@ -1,12 +1,12 @@
 # Admin Studio implementation
 
-The `/admin` frontend uses React, React Router, Tailwind, Radix primitives, TanStack Query/Table, React Hook Form and ECharts. Its shared layout and controls follow Supabase Studio patterns; Cloudflare remains the data and authentication authority. The public site still loads the admin bundle lazily. The leading data column remains pinned alongside bulk-selection controls when scrolling a wide table.
+The task source for `/admin` uses Refine 5, Ant Design 5, React Router, TanStack Query and ECharts. Production publication is tracked separately in CURRENT; see [admin-monitoring.md](admin-monitoring.md). Its shared layout and controls follow Supabase Studio patterns; ECS Node/SQLite remains the data and authentication authority. The public site still loads the admin bundle lazily. The leading data column remains pinned alongside bulk-selection controls when scrolling a wide table.
 
 ## Data contracts
 
-All browser management requests use the existing same-origin Pages proxy, HttpOnly cookie, CSRF header and private Worker AdminAPI binding. Client permissions hide controls; Worker role and state guards authorize operations. The school selector changes query scope and is not a school ACL.
+All browser management requests use the existing same-origin Node proxy, HttpOnly cookie and CSRF header; management handlers remain private to the server process. Client permissions hide controls; Worker role and state guards authorize operations. The school selector changes query scope and is not a school ACL.
 
-The resource registry exposes 82 actions. Lists use server-side filtering, stable sorting and pagination. Saved views store only view state in the current browser, keyed by admin ID and resource. Search results identify an object and link to its details. Query keys include admin, school, resource and filters; inactive requests can be aborted.
+The baseline registry preserves 82 business actions; six super-admin monitoring reads bring the task source to 88. Lists use server-side filtering, stable sorting and pagination. Saved views store only view state in the current browser, keyed by admin ID and resource. Search results identify an object and link to its details. Query keys include admin, school, resource and filters; inactive requests can be aborted.
 
 The overview completeProfiles metric counts completed profiles. The admin does not expose App usage/activity metrics. New profiles mean profile creation, and content trends mean record creation regardless of later moderation status. Current hidden inventory and recorded hide transitions are separate measurements. Feedback and reports both include `open` and `reviewed` in pending work.
 
@@ -20,7 +20,7 @@ Teacher/course/dish ratings have distinct composite IDs, target filters and raw-
 - Super-admin diagnostics: environment, deployed commit, backend mode, scheduled runs, pending change signals and media deletion jobs. Filters and record details use bounded queries. Request logs and performance measurements show “not collected”.
 - Super-admin quality checks: rating count/average/star counters, post interaction counters, declared media quantity, active-semester uniqueness, comment relationships and native calendar shape. Each check exposes at most twenty object IDs. Missing media declarations are identified separately. No SQL editor, repair button or automatic historical data mutation is exposed.
 
-## Audit and verification
+## Historical audit and verification (2026-10-14)
 
 The resource/metric provenance checklist is [admin-data-provenance.md](admin-data-provenance.md). The publication receipt is [admin-studio-delivery.json](admin-studio-delivery.json).
 

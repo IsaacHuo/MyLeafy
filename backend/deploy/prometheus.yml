@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 30s
+  scrape_timeout: 5s
+  evaluation_interval: 30s
+scrape_configs:
+  - job_name: host
+    static_configs:
+      - targets: ['127.0.0.1:9100']
+    sample_limit: 3000
+  - job_name: caddy
+    static_configs:
+      - targets: ['127.0.0.1:2019']
+    sample_limit: 5000
+  - job_name: api
+    static_configs:
+      - targets: ['127.0.0.1:3120']
+        labels: {environment: production}
+      - targets: ['127.0.0.1:3121']
+        labels: {environment: staging}
+    sample_limit: 1000
+  - job_name: monitor
+    static_configs:
+      - targets: ['127.0.0.1:3140']
+        labels: {environment: production}
+      - targets: ['127.0.0.1:3141']
+        labels: {environment: staging}
+    sample_limit: 10000

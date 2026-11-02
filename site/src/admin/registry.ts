@@ -1,4 +1,10 @@
 export const adminActionNames = [
+  "monitoringOverview",
+  "monitoringSeries",
+  "requestLogList",
+  "serviceLogList",
+  "monitoringAlerts",
+  "monitoringReports",
   "requestAndroidPublication",
   "listAndroidReleases",
   "revokeAndroidRelease",

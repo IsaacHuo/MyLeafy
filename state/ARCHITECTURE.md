@@ -290,9 +290,11 @@ Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 2
 - `backend/`：Node API、SQLite migrations、文件/实时/任务运行层与迁移工具。
 - `supabase/`：旧版客户端独立服务，继续保留。
 - 业务使用既有 `/v1`；后台使用 HttpOnly Cookie、CSRF/Origin、服务端权限和审计，不向浏览器传递数据库、邮件或发布密钥。
-- `site/`：React/Vite + Tailwind/Radix 运营后台。`site/functions/` 的接口由 Node 适配器组合，后台保持 lazy 加载；运行时不需要 Cloudflare 服务绑定。
+- `site/`：官网使用 React/Vite + Tailwind/Radix；本任务源码中的 admin 使用 Refine 5 / Ant Design 5，生产切换状态见 CURRENT。`site/functions/` 的接口由 Node 适配器组合，后台保持 lazy 加载；运行时不需要 Cloudflare 服务绑定。
 - 客户端 `Services/Cloudflare/` 和有关类型名保留为内部标识，原域名与协议保持；不代表请求仍由 Cloudflare 承载。
 - 原 Cloudflare 已冻结写入、停用 Cron、解绑服务域名并禁用旧工作流；数据至少保留七天，清退另行确认。`support@myleafy.space` 已迁至阿里邮箱免费版，所有者确认收信与回复成功；阿里云权威 DNS 使用 qiye MX/SPF，Cloudflare Email Routing 已关闭、旧 Cloudflare MX/SPF/DKIM 已移除。验证码仍由 ECS 调用 Resend，其 DNS 与凭据保持。邮箱为独立云产品，换 ECS 不迁邮箱数据或密码；旧 Cloudflare Zone 随退役另行确认。
+
+监控源码使用独立 monitor/systemd、SQLite 和 Prometheus，采集网关、Node、主机与允许来源的脱敏日志。管理代理仅向超级管理员开放固定只读查询；采集与发信不阻塞业务 API。端口、保留与验证边界见 [Admin 监控](../docs/engineering/admin-monitoring.md)。
 
 ## 11. 当前行为约束
 

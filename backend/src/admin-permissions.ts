@@ -85,6 +85,7 @@ export function permissionsForRole(role: AdminRole): AdminPermission[] {
       { resource: "admins", actions: ["list", "show", "create", "edit", "delete", "export"] },
       { resource: "sessions", actions: ["list", "show", "delete", "export"] },
       { resource: "operations", actions: ["list", "show"] },
+      { resource: "monitoring", actions: ["list", "show"] },
       { resource: "data-quality", actions: ["list", "show"] },
       { resource: "audit-logs", actions: ["list", "show", "export"] },
     );

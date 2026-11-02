@@ -1,0 +1,26 @@
+[Unit]
+Description=MyLeafy logs and monitoring (%i)
+After=network-online.target myleafy-prometheus.service systemd-tmpfiles-setup.service
+Wants=network-online.target
+[Service]
+User=myleafy-monitor
+Group=myleafy-monitor
+SupplementaryGroups=systemd-journal caddy
+EnvironmentFile=/etc/myleafy/%i.monitor.env
+WorkingDirectory=/opt/myleafy/%i/current/backend
+ExecStart=/usr/local/bin/node dist/monitor.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+MemoryMax=128M
+CPUQuota=20%
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/myleafy-monitor/%i
+ReadOnlyPaths=/var/lib/caddy/myleafy-access /run/myleafy-monitor
+InaccessiblePaths=/var/lib/myleafy /var/backups/myleafy
+[Install]
+WantedBy=multi-user.target

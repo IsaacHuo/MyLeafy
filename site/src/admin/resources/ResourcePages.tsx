@@ -6,14 +6,16 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useList } from "@refinedev/core";
 import {
-  useReactTable,
-  getCoreRowModel,
-  flexRender,
-  type ColumnDef,
-  type VisibilityState,
-} from "@tanstack/react-table";
-import { useForm, Controller } from "react-hook-form";
+  Table,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Checkbox,
+  type TableColumnsType,
+} from "antd";
 import { toast } from "sonner";
 import {
   ArrowUpDown,
@@ -116,7 +118,7 @@ export function ResourceList({
     [columnsOpen, setColumnsOpen] = useState(false),
     [viewsOpen, setViewsOpen] = useState(false),
     [viewName, setViewName] = useState(""),
-    [visibility, setVisibility] = useState<VisibilityState>({}),
+    [visibility, setVisibility] = useState<Record<string, boolean>>({}),
     [selection, setSelection] = useState<Record<string, boolean>>({}),
     [bulk, setBulk] = useState(false),
     [bulkStatus, setBulkStatus] = useState("hidden");
@@ -126,7 +128,7 @@ export function ResourceList({
       name: string;
       campus: string;
       query: string;
-      visibility: VisibilityState;
+      visibility: Record<string, boolean>;
     }[]
   >(() => {
     try {
@@ -135,29 +137,36 @@ export function ResourceList({
       return [];
     }
   });
-  const query = useQuery({
-    queryKey: [
-      "admin",
-      identity?.admin.id,
-      campus,
-      resource,
-      filters,
-      page,
-      perPage,
-      sortField,
-      sortOrder,
+  const { query } = useList<RecordData>({
+    resource,
+    pagination: { currentPage: page, pageSize: perPage, mode: "server" },
+    sorters: [
+      {
+        field: sortField,
+        order: sortOrder.toLowerCase() === "asc" ? "asc" : "desc",
+      },
     ],
-    queryFn: ({ signal }) =>
-      dataProvider.getList(resource, {
-        filter: {
-          ...filters,
-          campusID: campus === "all" ? undefined : campus,
-          timezone: "Asia/Shanghai",
-        },
-        pagination: { page, perPage },
-        sort: { field: sortField, order: sortOrder },
-        signal,
-      }),
+    meta: {
+      filters: {
+        ...filters,
+        campusID: campus === "all" ? undefined : campus,
+        timezone: "Asia/Shanghai",
+      },
+    },
+    queryOptions: {
+      queryKey: [
+        "admin",
+        identity?.admin.id,
+        campus,
+        resource,
+        filters,
+        page,
+        perPage,
+        sortField,
+        sortOrder,
+      ],
+      enabled: !!identity,
+    },
   });
   useEffect(() => setSelection({}), [campus, params]);
   const update = (values: Record<string, unknown>) => {
@@ -179,35 +188,13 @@ export function ResourceList({
       identity?.admin.role === "super_admin" ||
       c.source !== "edu_id",
   );
-  const definitions = useMemo<ColumnDef<RecordData>[]>(
+  const definitions = useMemo<TableColumnsType<RecordData>>(
     () => [
-      ...(canBulk
-        ? [
-            {
-              id: "select",
-              header: ({ table }: any) => (
-                <input
-                  type="checkbox"
-                  aria-label="选择本页"
-                  checked={table.getIsAllRowsSelected()}
-                  onChange={table.getToggleAllRowsSelectedHandler()}
-                />
-              ),
-              cell: ({ row }: any) => (
-                <input
-                  type="checkbox"
-                  aria-label={`选择 ${row.original.id}`}
-                  checked={row.getIsSelected()}
-                  onChange={row.getToggleSelectedHandler()}
-                />
-              ),
-            },
-          ]
-        : []),
       ...displayColumns.map((column, index) => ({
-        id: column.source,
-        accessorFn: (r: RecordData) => valueAt(r, column.source),
-        header: () =>
+        key: column.source,
+        fixed: index === 0 ? ("left" as const) : undefined,
+        width: index === 0 ? 220 : 180,
+        title: () =>
           column.sortable ? (
             <button
               onClick={() =>
@@ -227,8 +214,8 @@ export function ResourceList({
           ) : (
             column.label
           ),
-        cell: ({ row, getValue }: any) => {
-          const value = getValue();
+        render: (_: unknown, record: RecordData) => {
+          const value = valueAt(record, column.source);
           if (column.kind === "image")
             return value ? (
               <img
@@ -247,7 +234,7 @@ export function ResourceList({
                 : valueLabel(value ?? column.fallback);
           return index === 0 ? (
             <Link
-              to={`/${resource}/${encodeURIComponent(row.original.id)}`}
+              to={`/${resource}/${encodeURIComponent(record.id)}`}
               title={text}
             >
               {text}
@@ -272,10 +259,10 @@ export function ResourceList({
         },
       })),
       {
-        id: "actions",
-        header: "操作",
-        cell: ({ row }: any) => {
-          const r = row.original;
+        key: "actions",
+        title: "操作",
+        width: 280,
+        render: (_: unknown, r: RecordData) => {
           return (
             <div className="studio-actions">
               <Link
@@ -321,17 +308,6 @@ export function ResourceList({
     ],
     [config, canBulk, can, resource, sortField, sortOrder, params],
   );
-  const table = useReactTable({
-    data: rows,
-    columns: definitions,
-    getCoreRowModel: getCoreRowModel(),
-    manualPagination: true,
-    manualSorting: true,
-    state: { columnVisibility: visibility, rowSelection: selection },
-    onColumnVisibilityChange: setVisibility,
-    onRowSelectionChange: setSelection,
-    getRowId: (r) => String(r.id),
-  });
   const filterFields: FormFieldConfig[] = [
     ...(config.searchable === false
       ? []
@@ -523,68 +499,37 @@ export function ResourceList({
         ) : rows.length === 0 ? (
           <Empty />
         ) : (
-          <div className="studio-table-wrap">
-            <table className="studio-table">
-              <thead>
-                {table.getHeaderGroups().map((group) => (
-                  <tr key={group.id}>
-                    {group.headers.map((header, index) => (
-                      <th
-                        key={header.id}
-                        className={
-                          index <= (canBulk ? 1 : 0) ? "sticky-col" : ""
-                        }
-                        style={
-                          canBulk && index <= 1
-                            ? {
-                                left: index === 0 ? 0 : 48,
-                                ...(index === 0
-                                  ? { width: 48, minWidth: 48, maxWidth: 48 }
-                                  : {}),
-                              }
-                            : undefined
-                        }
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id}>
-                    {row.getVisibleCells().map((cell, index) => (
-                      <td
-                        key={cell.id}
-                        className={
-                          index <= (canBulk ? 1 : 0) ? "sticky-col" : ""
-                        }
-                        style={
-                          canBulk && index <= 1
-                            ? {
-                                left: index === 0 ? 0 : 48,
-                                ...(index === 0
-                                  ? { width: 48, minWidth: 48, maxWidth: 48 }
-                                  : {}),
-                              }
-                            : undefined
-                        }
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table<RecordData>
+            aria-label={config.label}
+            rowKey={(r) => String(r.id)}
+            dataSource={rows}
+            columns={definitions.filter(
+              (c) => c.key === "actions" || visibility[String(c.key)] !== false,
+            ).map((column,index)=>({...column,fixed:index===0&&column.key!=='actions'?'left' as const:undefined}))}
+            pagination={false}
+            scroll={{ x: "max-content" }}
+            rowSelection={
+              canBulk
+                ? {
+                    fixed: true,
+                    columnTitle: <span aria-label="选择本页">选择</span>,
+                    selectedRowKeys: Object.keys(selection).filter(
+                      (key) => selection[key],
+                    ),
+                    onChange: (keys) =>
+                      setSelection(
+                        Object.fromEntries(
+                          keys.map((key) => [String(key), true]),
+                        ),
+                      ),
+                    getCheckboxProps: (record) => ({
+                      name: `select-${record.id}`,
+                      "aria-label": `选择 ${record.id}`,
+                    }),
+                  }
+                : undefined
+            }
+          />
         )}
         <div className="studio-pagination">
           <span>共 {query.data?.total ?? "—"} 条</span>
@@ -635,19 +580,20 @@ export function ResourceList({
         title="显示列"
       >
         <div className="studio-form studio-label-list">
-          {table
-            .getAllLeafColumns()
-            .filter((c) => !["actions", "select"].includes(c.id))
-            .map((column) => (
-              <label key={column.id}>
-                <input
-                  type="checkbox"
-                  checked={column.getIsVisible()}
-                  onChange={column.getToggleVisibilityHandler()}
-                />
-                {config.columns.find((c) => c.source === column.id)?.label}
-              </label>
-            ))}
+          {displayColumns.map((column) => (
+            <Checkbox
+              key={column.source}
+              checked={visibility[column.source] !== false}
+              onChange={(event) =>
+                setVisibility((value) => ({
+                  ...value,
+                  [column.source]: event.target.checked,
+                }))
+              }
+            >
+              {column.label}
+            </Checkbox>
+          ))}
         </div>
       </Dialog>
       <Dialog
@@ -792,24 +738,21 @@ export function RecordForm({
         ? initialValue(record, f.source) === true
         : f.kind === "json"
           ? initialValue(record, f.source) || []
-          : f.kind === "datetime"
-            ? initialValue(record, f.source)
-            : initialValue(record, f.source),
+          : initialValue(record, f.source),
     ]),
   );
-  const {
-      control,
-      handleSubmit,
-      formState: { isDirty, isSubmitting },
-    } = useForm<RecordData>({ defaultValues: defaults }),
+  const [form] = Form.useForm<RecordData>();
+  const [isDirty, setDirty] = useState(false),
+    [isSubmitting, setSubmitting] = useState(false),
     [error, setFailure] = useState<unknown>(null),
     [discard, setDiscard] = useState(false);
   const close = () => {
     if (isDirty) setDiscard(true);
     else onClose();
   };
-  const submit = handleSubmit(async (values) => {
+  const submit = async (values: RecordData) => {
     setFailure(null);
+    setSubmitting(true);
     try {
       if (onSubmit) await onSubmit(values);
       else if (record.id)
@@ -822,135 +765,150 @@ export function RecordForm({
       toast.success(`${title}成功`);
       await queryClient.invalidateQueries({ queryKey: ["admin"] });
       onClose();
-    } catch (err) {
-      setFailure(err);
+    } catch (error) {
+      setFailure(error);
+    } finally {
+      setSubmitting(false);
     }
-  });
+  };
   return (
     <>
       <Dialog open onClose={close} busy={isSubmitting} title={title}>
-        <form className="studio-form" onSubmit={submit}>
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={defaults}
+          onFinish={submit}
+          onValuesChange={(_, values) =>
+            setDirty(
+              JSON.stringify(values) !== JSON.stringify(defaults) ||
+                Object.values(values).some((v) => v?.rawFile instanceof File),
+            )
+          }
+        >
           {description && <p>{description}</p>}
           {fields.map((field) => (
-            <Controller
+            <Form.Item
               key={field.source}
               name={field.source}
-              control={control}
-              rules={{
-                validate: (value) =>
-                  !field.required ||
-                  (value !== undefined &&
-                    value !== null &&
-                    value !== "" &&
-                    (!(typeof value === "string") ||
-                      value.trim().length > 0)) ||
-                  "必填",
-              }}
-              render={({ field: input, fieldState }) => (
-                <label>
-                  {field.label.replace(" JSON", "")}
-                  {field.kind === "json" ? (
-                    <ArrayEditor
-                      value={input.value}
-                      onChange={input.onChange}
-                      source={field.source}
-                    />
-                  ) : field.kind === "boolean" ? (
-                    <input
-                      type="checkbox"
-                      checked={input.value === true}
-                      onChange={(e) => input.onChange(e.target.checked)}
-                    />
-                  ) : field.kind === "image" ? (
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file && file.size <= 2097152)
-                          input.onChange({ rawFile: file });
-                        else if (file)
-                          setFailure(new Error("图片不得超过 2 MB"));
-                      }}
-                    />
-                  ) : field.kind === "select" ? (
-                    <select {...input} value={input.value ?? ""}>
-                      <option value="">请选择</option>
-                      {field.choices?.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : field.kind === "longtext" ? (
-                    <textarea {...input} />
-                  ) : (
-                    <input
-                      {...input}
-                      value={
-                        field.kind === "datetime"
-                          ? localDateTime(input.value)
-                          : (input.value ?? "")
-                      }
-                      type={
-                        field.kind === "number"
-                          ? "number"
-                          : field.kind === "password"
-                            ? "password"
-                            : field.kind === "date"
-                              ? "date"
-                              : field.kind === "datetime"
-                                ? "datetime-local"
-                                : "text"
-                      }
-                      step={field.kind === "number" ? "any" : undefined}
-                      onChange={(e) =>
-                        input.onChange(
-                          field.kind === "number"
-                            ? e.target.value === ""
-                              ? ""
-                              : Number(e.target.value)
-                            : field.kind === "datetime" && e.target.value
-                              ? new Date(e.target.value).toISOString()
-                              : e.target.value,
-                        )
-                      }
-                    />
-                  )}{" "}
-                  {fieldState.error && (
-                    <small role="alert">{fieldState.error.message}</small>
-                  )}
-                </label>
+              label={field.label.replace(" JSON", "")}
+              valuePropName={field.kind === "boolean" ? "checked" : "value"}
+              rules={
+                field.required
+                  ? [
+                      {
+                        required: true,
+                        validator: async (_, value) => {
+                          if (
+                            value === undefined ||
+                            value === null ||
+                            value === "" ||
+                            (typeof value === "string" && !value.trim())
+                          )
+                            throw new Error("必填");
+                        },
+                      },
+                    ]
+                  : []
+              }
+            >
+              {field.kind === "json" ? (
+                <ArrayEditor source={field.source} />
+              ) : field.kind === "boolean" ? (
+                <Checkbox />
+              ) : field.kind === "image" ? (
+                <ImageField onError={setFailure} />
+              ) : field.kind === "select" ? (
+                <Select
+                  placeholder="请选择"
+                  options={field.choices?.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                  }))}
+                />
+              ) : field.kind === "longtext" ? (
+                <Input.TextArea rows={4} />
+              ) : field.kind === "number" ? (
+                <InputNumber style={{ width: "100%" }} />
+              ) : field.kind === "password" ? (
+                <Input.Password autoComplete="new-password" />
+              ) : field.kind === "datetime" ? (
+                <DateTimeField />
+              ) : (
+                <Input type={field.kind === "date" ? "date" : "text"} />
               )}
-            />
+            </Form.Item>
           ))}
           {error != null && <ErrorState error={error} />}
-          <footer>
+          <div className="studio-form-actions">
             <Button onClick={close} disabled={isSubmitting}>
               取消
             </Button>
             <Button type="submit" variant="primary" disabled={isSubmitting}>
               {isSubmitting ? "正在提交…" : "保存"}
             </Button>
-          </footer>
-        </form>
+          </div>
+        </Form>
       </Dialog>
       <Dialog
         open={discard}
         onClose={() => setDiscard(false)}
         title="放弃未保存的修改？"
       >
-        <div className="studio-form">
-          <p>修改尚未提交，关闭后会丢失。</p>
-          <footer>
-            <Button onClick={() => setDiscard(false)}>继续编辑</Button>
-            <Button variant="danger" onClick={onClose}>
-              放弃修改
-            </Button>
-          </footer>
+        <p>修改尚未提交，关闭后会丢失。</p>
+        <div className="studio-form-actions">
+          <Button onClick={() => setDiscard(false)}>继续编辑</Button>
+          <Button variant="danger" onClick={onClose}>
+            放弃修改
+          </Button>
         </div>
       </Dialog>
     </>
+  );
+}
+function ImageField({
+  id,
+  onChange,
+  onError,
+}: {
+  id?: string;
+  value?: unknown;
+  onChange?: (value: unknown) => void;
+  onError: (error: Error) => void;
+}) {
+  return (
+    <Input
+      id={id}
+      type="file"
+      accept="image/png,image/jpeg"
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        if (file && file.size <= 2097152) onChange?.({ rawFile: file });
+        else if (file) onError(new Error("图片不得超过 2 MB"));
+      }}
+    />
+  );
+}
+function DateTimeField({
+  id,
+  value,
+  onChange,
+}: {
+  id?: string;
+  value?: unknown;
+  onChange?: (value: string) => void;
+}) {
+  return (
+    <Input
+      id={id}
+      type="datetime-local"
+      value={localDateTime(value)}
+      onChange={(event) =>
+        onChange?.(
+          event.target.value ? new Date(event.target.value).toISOString() : "",
+        )
+      }
+    />
   );
 }
 function ArrayEditor({
@@ -958,8 +916,8 @@ function ArrayEditor({
   onChange,
   source,
 }: {
-  value: unknown;
-  onChange: (value: unknown) => void;
+  value?: unknown;
+  onChange?: (value: unknown) => void;
   source: string;
 }) {
   let parsed: unknown = value;
@@ -1009,7 +967,7 @@ function ArrayEditor({
                   checked={v === true}
                   value={typeof v === "boolean" ? undefined : String(v ?? "")}
                   onChange={(e) =>
-                    onChange(
+                    onChange?.(
                       array.map((row, i) =>
                         i === index
                           ? {
@@ -1032,20 +990,22 @@ function ArrayEditor({
             <input
               value={String(item)}
               onChange={(e) =>
-                onChange(
+                onChange?.(
                   array.map((row, i) => (i === index ? e.target.value : row)),
                 )
               }
             />
           )}
-          <Button onClick={() => onChange(array.filter((_, i) => i !== index))}>
+          <Button
+            onClick={() => onChange?.(array.filter((_, i) => i !== index))}
+          >
             移除此项
           </Button>
         </div>
       ))}
       <Button
         onClick={() =>
-          onChange([
+          onChange?.([
             ...array,
             Object.fromEntries(
               keys.map((key) => [
@@ -1146,6 +1106,7 @@ function DetailSheet({
       ) : (
         <RecordDetailContent
           resource={resource}
+          adminRole={identity?.admin.role}
           detail={detail.data ?? record ?? fallback.data?.data[0] ?? {}}
         />
       )}
@@ -1155,11 +1116,12 @@ function DetailSheet({
 export function RecordDetailContent({
   resource,
   detail,
+  adminRole,
 }: {
   resource: string;
   detail: RecordData;
+  adminRole?: "super_admin" | "operator" | "viewer";
 }) {
-  const { identity } = useAdmin();
   const record =
       detail.post ?? detail.profile ?? detail.poll ?? detail.report ?? detail,
     config = resourceConfigs[resource];
@@ -1179,7 +1141,7 @@ export function RecordDetailContent({
             (c) =>
               !["body", "images"].includes(c.source) &&
               (resource !== "profiles" ||
-                identity?.admin.role === "super_admin" ||
+                adminRole === "super_admin" ||
                 c.source !== "edu_id"),
           )
           .map((c) => (

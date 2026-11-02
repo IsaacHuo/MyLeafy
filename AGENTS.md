@@ -36,7 +36,7 @@ MyLeafy 是 iOS、Android、ECS 后端与官网/运营后台共用的 Monorepo�
 | iOS | SwiftUI / SwiftData / URLSession / SPM，最低 iOS 17；iOS 26+ 按可用性采用 Liquid Glass；先检查现有 SwiftUI 模式 |
 | Android | Kotlin / Compose / Room / DataStore / OkHttp，最低 API 29；保留 features / core 分层及原生交互 |
 | Backend | Node 24 / Hono / SQLite / 本地文件 / WebSocket / Better Auth，由 ECS systemd/Caddy 承载；共享契约在 contracts；旧 Supabase 仍服务已安装旧客户端 |
-| 官网/admin | React / TypeScript / Tailwind / Radix / TanStack Query、Table / React Hook Form；管理授权在服务端 |
+| 官网/admin | 官网 React / TypeScript / Tailwind / Radix；admin Refine 5 / Ant Design 5 / TanStack Query / ECharts；管理授权在服务端 |
 
 校园能力决定入口；学校数据、MyLeafy 服务端数据与用户本地数据不得混淆权威来源。共享协议或 fixtures 改动必须检查所有受影响端，不根据开发进度差异降低契约验证要求。
 

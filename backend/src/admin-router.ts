@@ -1,4 +1,6 @@
 import { workQueue, operationalHealth, diagnosticList, dataQuality } from './admin-insights';
+import { adminMonitoring, auditMonitorDenial } from './admin-monitoring';
+import { actionKinds } from './monitoring/model';
 import { globalSearch, previewCommunityFeed } from './admin-discovery';
 import { upsertPostgraduateSource, reviewPostgraduateSuggestion, reviewCatalogSuggestion, reviewCampusRequest } from './admin-remaining-reviews';
 import { prepareCommunityBannerImageUpload, uploadCommunityBanner, saveCommunityBanner, publishCommunityBanner, archiveCommunityBanner } from './admin-remaining-banners';
@@ -44,7 +46,7 @@ const mutations:Record<string,Handler>={
   upsertNationalCalendarRuntimeConfig:(env,context,params)=>upsertRuntime(env,context,params,true),
 };
 
-export const supportedAdminActions = new Set(['listAndroidReleases','overview','workQueue','operationalHealth','diagnosticList','dataQuality','globalSearch','previewCommunityFeed','getPost','getProfile','getPoll','getModerationReport',...Object.keys(adminLists),...Object.keys(mutations)]);
+export const supportedAdminActions = new Set(['listAndroidReleases','overview','workQueue','operationalHealth','diagnosticList','dataQuality','globalSearch','previewCommunityFeed','getPost','getProfile','getPoll','getModerationReport',...Object.keys(adminLists),...Object.keys(mutations),...Object.keys(actionKinds)]);
 
 /** Invoked only by the dedicated AdminAPI service-binding entrypoint. */
 export async function handleAdminRequest(request:Request,env:BackendEnv):Promise<Response>{
@@ -76,6 +78,11 @@ export async function handleAdminRequest(request:Request,env:BackendEnv):Promise
     const action=text(body.action,100),params=body.params??{};
     if(!supportedAdminActions.has(action))throw new ApiError(400,'bad_request','未知管理操作。');
     if(!params||typeof params!=='object'||Array.isArray(params))throw new ApiError(400,'bad_request','管理操作参数必须是对象。');
+    // Monitoring is a separate read-only system. Polling must not grow the business audit DB.
+    if(Object.hasOwn(actionKinds,action)){
+      try{return json({data:await adminMonitoring(env,context,action as keyof typeof actionKinds,params as Row),meta:{request_id:requestId,duration_ms:Date.now()-started}});}
+      catch(error){if(error instanceof ApiError&&error.status===403)await auditMonitorDenial(env,context,action);throw error;}
+    }
     let data:unknown;
     if(action==='listAndroidReleases')data=await listAndroidReleases(env,params as Row);
     else if(action==='workQueue')data=await workQueue(env,context,params as Row);

@@ -1,0 +1,15 @@
+[Unit]
+Description=Queue MyLeafy daily monitoring report (%i)
+[Service]
+Type=oneshot
+User=myleafy-monitor
+Group=myleafy-monitor
+EnvironmentFile=/etc/myleafy/%i.monitor.env
+WorkingDirectory=/opt/myleafy/%i/current/backend
+ExecStart=/usr/local/bin/node dist/monitor.mjs --report
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/myleafy-monitor/%i

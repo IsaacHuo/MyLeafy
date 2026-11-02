@@ -1,0 +1,20 @@
+[Unit]
+Description=MyLeafy metrics storage
+After=network.target
+[Service]
+User=myleafy-monitor
+Group=myleafy-monitor
+ExecStart=/usr/local/bin/myleafy-prometheus --config.file=/etc/myleafy/prometheus.yml --storage.tsdb.path=/var/lib/myleafy-monitor/prometheus --storage.tsdb.retention.time=14d --storage.tsdb.retention.size=768MB --storage.tsdb.wal-segment-size=32MB --storage.tsdb.min-block-duration=30m --web.listen-address=127.0.0.1:9090 --query.max-concurrency=4 --query.timeout=5s --query.max-samples=100000
+Environment=GOMEMLIMIT=256MiB
+Restart=on-failure
+RestartSec=5
+MemoryMax=384M
+CPUQuota=30%
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/myleafy-monitor/prometheus
+[Install]
+WantedBy=multi-user.target
