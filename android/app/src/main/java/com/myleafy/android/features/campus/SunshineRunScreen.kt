@@ -36,6 +36,7 @@ import java.time.LocalDate
     var rules by rememberSaveable { mutableStateOf(false) }
     var date by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var reminderVisible by rememberSaveable { mutableStateOf(false) }
+    var reminderSaving by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<com.myleafy.android.core.data.local.SunshineRunRecordEntity?>(null) }
     val config = SemesterConfig.current
     val today = LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))
@@ -77,23 +78,39 @@ import java.time.LocalDate
         } }
     } }
     if (rules) SunshineRulesDialog(saving, error, state.settings.totalTarget, state.settings.weeksPerPeriod, state.settings.periodTarget, state.settings.excludedWeeks, state.settings.skipsExcludedWeeks, { rules = false }) { totalTarget, weeks, target, excluded, skipExcluded -> viewModel.saveRules(totalTarget, weeks, target, excluded, skipExcluded) { rules = false } }
-    if (reminderVisible) SunshineReminderEditor(reminder ?: SunshineReminderEntity(identity.scopeKey), { reminderVisible = false }) { value -> owner.launch {
-        try { check(value.scopeKey == container.activeAppScopeStore.current.scopeKey) { "账号已切换" }; container.campusPersonalDao.save(value); container.sunshineReminderScheduler.reconcile(); reminderVisible = false
-            if (value.enabled && android.os.Build.VERSION.SDK_INT >= 33 && !androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-        } catch (failure: Exception) { if (failure is kotlinx.coroutines.CancellationException) throw failure; viewModel.reportError(failure.message ?: "提醒保存失败") }
-    } }
+    if (reminderVisible) SunshineReminderEditor(reminder ?: SunshineReminderEntity(identity.scopeKey), error, reminderSaving, { reminderVisible = false }) { value ->
+        reminderSaving = true
+        owner.launch {
+            try {
+                check(value.scopeKey == container.activeAppScopeStore.current.scopeKey) { "账号已切换" }
+                container.campusPersonalDao.save(value)
+                container.sunshineReminderScheduler.reconcile()
+                reminderVisible = false
+                if (value.enabled && android.os.Build.VERSION.SDK_INT >= 33 && !androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            } catch (failure: Exception) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                viewModel.reportError(failure.message ?: "提醒保存失败")
+            } finally {
+                reminderSaving = false
+            }
+        }
+    }
     deleting?.let { record -> LeafyAlertDialog(onDismissRequest = { deleting = null }, title = { Text("删除这次跑步记录？") }, confirmButton = { TextButton(onClick = { viewModel.deleteRun(record); deleting = null }) { Text("删除") } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } }) }
 }
 
-@Composable private fun SunshineReminderEditor(initial: SunshineReminderEntity, onDismiss: () -> Unit, onSave: (SunshineReminderEntity) -> Unit) {
+@Composable private fun SunshineReminderEditor(initial: SunshineReminderEntity, error: String?, saving: Boolean, onDismiss: () -> Unit, onSave: (SunshineReminderEntity) -> Unit) {
     var enabled by rememberSaveable { mutableStateOf(initial.enabled) }
     var weekdays by rememberSaveable { mutableStateOf(initial.weekdays) }
     var hour by rememberSaveable { mutableStateOf(initial.hour.toString()) }
     var minute by rememberSaveable { mutableStateOf(initial.minute.toString()) }
-    LeafyAlertDialog(onDismissRequest = onDismiss, title = { Text("本地长跑提醒") }, text = { Column {
+    val dirty = enabled != initial.enabled || weekdays != initial.weekdays || hour.toIntOrNull() != initial.hour || minute.toIntOrNull() != initial.minute
+    val requestExit = rememberEditorExit(dirty, saving, onDismiss)
+    LeafyAlertDialog(onDismissRequest = requestExit, title = { Text("本地长跑提醒") }, text = { Column {
+        // 保存失败时对话框仍然开着，提示必须留在对话框内，否则会被遮罩挡住、用户看不到失败原因。
+        error?.let { LeafyStatusBanner(it, isError = true) }
         Row { Text("开启提醒", Modifier.weight(1f)); Switch(enabled, { enabled = it }) }
         Text("周期达标、当天已记录及排除周不会提醒；系统节电可能延迟投递。", style = MaterialTheme.typography.bodySmall)
         FlowRow { (1..7).forEach { day -> FilterChip(day.toString() in weekdays.split(','), { val values = weekdays.split(',').filter(String::isNotBlank); weekdays = (if (day.toString() in values) values - day.toString() else values + day.toString()).sorted().joinToString(",") }, { Text("周${listOf("一","二","三","四","五","六","日")[day - 1]}") }) } }
         LeafyTextField(hour, { hour = it }, label = { Text("时（0–23）") }); LeafyTextField(minute, { minute = it }, label = { Text("分（0–59）") })
-    } }, confirmButton = { TextButton(enabled = hour.toIntOrNull() in 0..23 && minute.toIntOrNull() in 0..59 && (!enabled || weekdays.isNotBlank()), onClick = { onSave(initial.copy(enabled = enabled, weekdays = weekdays, hour = hour.toInt(), minute = minute.toInt())) }) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+    } }, confirmButton = { TextButton(enabled = !saving && hour.toIntOrNull() in 0..23 && minute.toIntOrNull() in 0..59 && (!enabled || weekdays.isNotBlank()), onClick = { onSave(initial.copy(enabled = enabled, weekdays = weekdays, hour = hour.toInt(), minute = minute.toInt())) }) { Text(if (saving) "保存中" else "保存") } }, dismissButton = { TextButton(enabled = !saving, onClick = requestExit) { Text("取消") } })
 }
