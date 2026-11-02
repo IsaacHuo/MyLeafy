@@ -75,10 +75,10 @@ Workbench 单文件传输上限按所安装版本核对。快照超过限制须�
 
 先从 Cloudflare 导出 BIND zone 文件，在受保护的本机目录保存。安装 `backend/scripts/ecs/requirements.txt` 后，运行 `aliyun-dns.py --source EXPORT_FILE --plan NEW_PLAN_FILE`，只生成计划，不改 DNS。它保留邮件/TXT/CAA 等记录，替换已知服务域名为 ECS 地址；发现未映射 Cloudflare 子域或不支持类型时停止。阿里云已有冲突记录也停止，不覆盖他人修改。
 
-备案及所有者验收后才使用 `--plan PLAN_FILE --apply --filing-approved`。脚本核对计划以来 DNS 未被修改，只新增已审阅记录，并保存创建结果；部分失败必须根据实际结果重新生成计划，不能盲目重放。当前 19 条计划中的邮件记录按原值保留，邮件服务迁移不阻塞其他目标；旧计划中的邮件阻塞标记已按所有者决定解除。NS 与 DNSSEC/DS 另行核对；2026-10-26 公共委派已经是 dns27/dns28.hichina.com，未检测到 DS，不能因为本机旧缓存再次改回 Cloudflare。
+备案及所有者验收后才使用 `--plan PLAN_FILE --apply --filing-approved`。脚本核对计划以来 DNS 未被修改，只新增已审阅记录，并保存创建结果；部分失败必须根据实际结果重新生成计划，不能盲目重放。初次切换的 19 条计划曾按原值保留邮件记录；2026-11-02 支持邮箱另行迁至阿里邮箱，当前 DNS 共 18 条。旧导入计划不能重放，最新邮件记录以 [Configuration DNS 快照](https://github.com/IsaacHuo/Configuration/blob/main/myleafy-ecs/dns/records.json) 为准。NS 与 DNSSEC/DS 另行核对；2026-10-26 公共委派已经是 dns27/dns28.hichina.com，未检测到 DS，不能因为本机旧缓存再次改回 Cloudflare。
 
 ## 正式切换验收
 
 备案系统的主体、人脸、短信核验和最终生产验收由所有者完成。切换前核对全部 DNS 记录、CAA、DNSSEC/DS、API/Pages/R2 域名绑定与 HTTPS 证书。切换后分别从权威 NS 和公共解析器检查根域、www、API、下载及测试域，确认不再指向 Cloudflare；验证网站、管理拒绝、签名媒体、WebSocket、邮件及 GitHub 发行流程。对外拨测不得包含真实学生凭据或修改生产业务数据。
 
-旧 Cloudflare 后端资源先冻结保留，至少 7 天；退役包括 Pages/Workers/D1/R2、旧 Cron、网站/API/下载绑定与专用发布凭据。支持邮箱迁移已暂缓，保留 Cloudflare Email Routing、邮件 MX/SPF/DKIM 及其 Zone，不因网站或 API 迁移删除。旧 Supabase 不在退役范围。未完成的步骤必须继续记为待办，不能凭本地测试或源码合入宣称迁移完成。
+旧 Cloudflare 后端资源先冻结保留，至少 7 天；退役包括 Pages/Workers/D1/R2、旧 Cron、网站/API/下载绑定与专用发布凭据。支持邮箱已迁至阿里邮箱免费版，所有者实测收信和回复成功；Cloudflare Email Routing 已关闭，阿里云 DNS 的旧 Cloudflare MX、SPF 授权与 DKIM 已移除。当前根域 MX 为 mx1/2/3.qiye.aliyun.com（优先级 5/10/15），SPF 为 `v=spf1 include:spf.qiye.aliyun.com -all`。Resend 和历史 DirectMail 子域记录保留，不将 `mail` 的现有记录替换为 CNAME；邮箱登录 [qiye.aliyun.com](https://qiye.aliyun.com/)。换 ECS 只更换业务 A 记录，邮箱为独立产品，不包含在 ECS 数据备份中。旧 Cloudflare Zone 随退役另行核对，不能影响其他域名或全局收件目标。旧 Supabase 不在退役范围。未完成的步骤必须继续记为待办，不能凭本地测试或源码合入宣称迁移完成。

@@ -1,6 +1,6 @@
 # 阿里云 ECS 迁移
 
-跟踪 [#53](https://github.com/IsaacHuo/MyLeafy/issues/53)。所有者确认迁移整套 Cloudflare 服务，允许维护中断，旧 Supabase 保留。后续补充要求包括权威 DNS。所有者于 2026-10-26 明确暂缓支持邮箱迁移，当前先完成官网、API、文件、数据库及发布链路，Cloudflare 邮件转发作为单独保留项。
+跟踪 [#53](https://github.com/IsaacHuo/MyLeafy/issues/53)。所有者确认迁移整套 Cloudflare 服务，允许维护中断，旧 Supabase 保留。后续补充要求包括权威 DNS。所有者于 2026-10-26 暂缓支持邮箱迁移；2026-11-02 已恢复并完成该项，当前结果见下文。
 
 ## 2026-11-02 最终切换结果
 
@@ -12,9 +12,15 @@
 
 旧正式 APK 1.2.8/code 12（5,860,825 字节）公网完整下载、SHA-256 与 Range 检查通过，实际约 13 秒，没有重建、重签名或触发新发行。原认证/媒体密钥及发布凭据已核对，publisher token 与仓库 Secret 一致。迁移后生产加密备份 342,261,760 字节，SHA-256 `323e08b85890b75dfba57eb6394832df62cb20fa9f22b40f4af4808d96e6812a`，已下载 Mac 并恢复验证 71 张普通表和 499 对象。服务器配置、去凭据模板及换机手册另存 [Configuration](https://github.com/IsaacHuo/Configuration/tree/main/myleafy-ecs)；加密数据和密钥分别单独保管。
 
-源数据至少保留至切换成功后七天，再另行确认清退；邮箱转发/Zone 与旧 Supabase 不在本次清退范围。Node 连接尝试时间和 Caddy ACME 出站 HTTP/1.1 参数均有实际故障及恢复验证，未降低 TLS 证书检查。
+源数据至少保留至切换成功后七天，再另行确认清退；旧 Cloudflare Zone 随清退核对，旧 Supabase 独立保留。Node 连接尝试时间和 Caddy ACME 出站 HTTP/1.1 参数均有实际故障及恢复验证，未降低 TLS 证书检查。
 
 源 Cron 已单独清空；如在目标从未开放业务写入时恢复旧端，除 `recover-source.mjs` 外，还须从受保护的 `source-schedules-before.json` 恢复原 Cron，再分别恢复域名绑定和 DNS。目标已接收新写入后，仍必须先保护新数据，禁止只切回旧库。
+
+## 2026-11-02 支持邮箱接管
+
+`support@myleafy.space` 已迁至独立的阿里邮箱免费版。账号与密码由所有者创建、保管；所有者以外部邮箱实测收信及回复均成功。阿里云权威 DNS 的三条根域 MX 为 mx1/2/3.qiye.aliyun.com，优先级分别 5/10/15；旧 600 秒 TTL 过后，SPF 收敛为 `v=spf1 include:spf.qiye.aliyun.com -all`。Cloudflare API 回读 Email Routing 为 disabled / unconfigured；旧 Cloudflare MX、SPF 授权和 DKIM 均已从权威 DNS 移除，其他记录逐项保持，当前共 18 条。
+
+Resend 的验证码发信及历史 DirectMail 子域记录保持。`mail` 已有记录，因此不添加可选的邮箱登录 CNAME，直接登录 [阿里邮箱](https://qiye.aliyun.com/)。旧转发收到的历史邮件仍在原收件邮箱，没有导入新邮箱。此项没有改动客户端、运行产物或触发部署；官网与 API 健康检查继续通过。脱敏配置见 [Configuration 邮箱说明](https://github.com/IsaacHuo/Configuration/blob/main/myleafy-ecs/MAIL.md)，原始操作回执留在受保护的本机目录。
 
 ## 目标与边界
 
@@ -45,7 +51,7 @@ SQLite 使用 WAL、外键约束与同步立即事务；业务批次和授权断
 
 操作入口见 [ECS 交付](../operations/ecs-delivery.md)。每日备份会短暂停止本环境服务，待排空后加密数据库、文件和运行配置；失败也恢复原先运行的服务。每日北京时间约 03:30 执行，完成快照保留 30 天。下载到 Mac 由所有者手动发起，不宣称已有自动异机备份。迁移前后必须实际下载并验证一份。
 
-旧 Cloudflare 数据至少保留 7 天，清退需另行确认。新源码禁止执行旧 Cloudflare 发布脚本；源恢复应使用迁移前记录的源码/版本，不将 ECS 代码误发到 Worker。当前非邮件迁移的验收覆盖运行、存储、下载、网站/API DNS 和 CI 发布凭据。`support@myleafy.space` 的 Cloudflare 邮件转发、对应 MX/SPF/DKIM 与 Zone 暂不退役，不阻塞其他服务；不能因此宣称所有 Cloudflare 服务均已停用。验证码发信继续使用现有 Resend，不在本次暂缓范围内。
+旧 Cloudflare 数据至少保留 7 天，清退需另行确认。新源码禁止执行旧 Cloudflare 发布脚本；源恢复应使用迁移前记录的源码/版本，不将 ECS 代码误发到 Worker。验收覆盖运行、存储、下载、网站/API DNS 和 CI 发布凭据。支持邮箱迁移结果独立记录如下；验证码发信继续使用现有 Resend。
 
 ## 迁移准备阶段证据（2026-10-26，历史记录）
 

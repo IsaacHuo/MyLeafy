@@ -30,4 +30,4 @@ Vite 用于公开页面和 mock API 界面开发。实际同域服务由 Node �
 
 官网展示网站备案 `桂ICP备2024050172号-4` 及 App 备案 `桂ICP备2024050172号-5A`。本轮所有者确认 App/网站正常；没有重新构建或签名移动端。
 
-`support@myleafy.space` 邮箱迁移按所有者要求暂缓；App 验证码仍由 ECS 调用 Resend。生产数据及服务器配置的换机手册见 [Configuration](https://github.com/IsaacHuo/Configuration/tree/main/myleafy-ecs)。
+`support@myleafy.space` 已迁至阿里邮箱免费版，所有者确认收信与回复成功，登录 [阿里邮箱](https://qiye.aliyun.com/)。Cloudflare Email Routing 已关闭；App 验证码仍由 ECS 调用 Resend。生产数据及服务器配置的换机手册见 [Configuration](https://github.com/IsaacHuo/Configuration/tree/main/myleafy-ecs)。
