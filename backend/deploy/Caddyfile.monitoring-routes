@@ -1,51 +1,30 @@
-# No raw URI/query is logged. Map only declared route shapes before writing access logs.
+# No raw URI/query is logged. Fixed routes precede parameter patterns, keeping common requests cheap.
 map {path} {monitor_route} {
   default /:unmatched
-  ~^/v1/releases/android/operations/[^/]+/claim/?$ /v1/releases/android/operations/:id/claim
-  ~^/v1/community/polls/[^/]+/deletion\-request/?$ /v1/community/polls/:id/deletion-request
-  ~^/v1/releases/android/operations/[^/]+/fail/?$ /v1/releases/android/operations/:id/fail
-  ~^/v1/community/posts/[^/]+/toggle\-favorite/?$ /v1/community/posts/:id/toggle-favorite
-  ~^/v1/community/posts/[^/]+/comment\-threads/?$ /v1/community/posts/:id/comment-threads
-  ~^/v1/community/comments/[^/]+/toggle\-like/?$ /v1/community/comments/:id/toggle-like
-  ~^/v1/community/posts/[^/]+/toggle\-like/?$ /v1/community/posts/:id/toggle-like
-  ~^/v1/timetables/members/[^/]+/leave/?$ /v1/timetables/members/:id/leave
-  ~^/v1/community/posts/[^/]+/comments/?$ /v1/community/posts/:id/comments
-  ~^/v1/community/posts/[^/]+/favorite/?$ /v1/community/posts/:id/favorite
-  ~^/v1/community/posts/[^/]+/pending/?$ /v1/community/posts/:id/pending
+  ~^/health/?$ /health
+  ~^/v1/releases/android/latest/?$ /v1/releases/android/latest
+  ~^//?$ /
+  ~^/v1/community/feed/?$ /v1/community/feed
+  ~^/release\.json/?$ /release.json
+  ~^/api/admin/actions/?$ /api/admin/actions
   ~^/v1/community/activity/comments/?$ /v1/community/activity/comments
   ~^/v1/releases/android/candidates/?$ /v1/releases/android/candidates
   ~^/v1/notifications/unread\-count/?$ /v1/notifications/unread-count
   ~^/v1/files/validate\-attachment/?$ /v1/files/validate-attachment
   ~^/v1/files/attachment\-download/?$ /v1/files/attachment-download
-  ~^/v1/notifications/[^/]+/dismiss/?$ /v1/notifications/:id/dismiss
   ~^/v1/timetables/invites/accept/?$ /v1/timetables/invites/accept
-  ~^/v1/community/posts/[^/]+/abort/?$ /v1/community/posts/:id/abort
   ~^/v1/releases/android/download/?$ /v1/releases/android/download
-  ~^/v1/announcements/[^/]+/dismiss/?$ /v1/announcements/:id/dismiss
   ~^/api/admin/android\-candidate/?$ /api/admin/android-candidate
-  ~^/v1/community/posts/[^/]+/like/?$ /v1/community/posts/:id/like
   ~^/v1/community/activity/posts/?$ /v1/community/activity/posts
-  ~^/v1/catalog/[^/]+/[^/]+/rating/?$ /v1/catalog/:kind/:id/rating
-  ~^/v1/community/polls/[^/]+/vote/?$ /v1/community/polls/:id/vote
   ~^/v1/releases/android/publish/?$ /v1/releases/android/publish
-  ~^/v1/releases/android/latest/?$ /v1/releases/android/latest
   ~^/v1/files/attach\-attachment/?$ /v1/files/attach-attachment
-  ~^/v1/timetables/members/[^/]+/?$ /v1/timetables/members/:id
-  ~^/v1/community/comments/[^/]+/?$ /v1/community/comments/:id
-  ~^/v1/announcements/[^/]+/read/?$ /v1/announcements/:id/read
   ~^/v1/notifications/read\-all/?$ /v1/notifications/read-all
-  ~^/v1/notifications/[^/]+/read/?$ /v1/notifications/:id/read
   ~^/v1/notifications/settings/?$ /v1/notifications/settings
   ~^/v1/files/validate\-images/?$ /v1/files/validate-images
   ~^/v1/profile/email/request/?$ /v1/profile/email/request
-  ~^/v1/catalog/[^/]+/ratings/?$ /v1/catalog/:kind/ratings
   ~^/v1/postgraduate\-sources/?$ /v1/postgraduate-sources
   ~^/api/admin/banner\-upload/?$ /api/admin/banner-upload
-  ~^/v1/releases/android/[^/]+/?$ /v1/releases/android/:id
   ~^/v1/profile/email/verify/?$ /v1/profile/email/verify
-  ~^/v1/community/blocks/[^/]+/?$ /v1/community/blocks/:id
-  ~^/v1/community/posts/[^/]+/?$ /v1/community/posts/:id
-  ~^/v1/community/polls/[^/]+/?$ /v1/community/polls/:id
   ~^/v1/catalog/suggestions/?$ /v1/catalog/suggestions
   ~^/v1/community/comments/?$ /v1/community/comments
   ~^/v1/timetables/members/?$ /v1/timetables/members
@@ -59,40 +38,61 @@ map {path} {monitor_route} {
   ~^/v1/timetables/stop/?$ /v1/timetables/stop
   ~^/v1/community/terms/?$ /v1/community/terms
   ~^/v1/community/posts/?$ /v1/community/posts
-  ~^/v1/community/feed/?$ /v1/community/feed
   ~^/v1/files/download/?$ /v1/files/download
   ~^/v1/profiles/stats/?$ /v1/profiles/stats
-  ~^/api/admin/actions/?$ /api/admin/actions
   ~^/v1/announcements/?$ /v1/announcements
   ~^/v1/campus/change/?$ /v1/campus/change
-  ~^/v1/catalog/[^/]+/?$ /v1/catalog/:kind
   ~^/v1/share\-preview/?$ /v1/share-preview
   ~^/api/admin/export/?$ /api/admin/export
   ~^/api/admin/logout/?$ /api/admin/logout
   ~^/v1/profile/image/?$ /v1/profile/image
-  ~^/v1/runtime/[^/]+/?$ /v1/runtime/:kind
   ~^/v1/notifications/?$ /v1/notifications
-  ~^/v1/events/[^/]+/?$ /v1/events/:scope
   ~^/v1/campus/select/?$ /v1/campus/select
   ~^/api/admin/login/?$ /api/admin/login
-  ~^/v1/profiles/[^/]+/?$ /v1/profiles/:id
   ~^/v1/files/upload/?$ /v1/files/upload
   ~^/v1/admin\-media/?$ /v1/admin-media
   ~^/v1/files/read/?$ /v1/files/read
   ~^/v1/timetables/?$ /v1/timetables
   ~^/api/admin/me/?$ /api/admin/me
-  ~^/release\.json/?$ /release.json
   ~^/v1/campuses/?$ /v1/campuses
   ~^/v1/feedback/?$ /v1/feedback
   ~^/v1/account/?$ /v1/account
   ~^/v1/profile/?$ /v1/profile
   ~^/privacy/?$ /privacy
-  ~^/health/?$ /health
   ~^/terms/?$ /terms
   ~^/admin/?$ /admin
-  ~^//?$ /
+  ~^/v1/releases/android/operations/[^/]+/claim/?$ /v1/releases/android/operations/:id/claim
+  ~^/v1/community/polls/[^/]+/deletion\-request/?$ /v1/community/polls/:id/deletion-request
+  ~^/v1/releases/android/operations/[^/]+/fail/?$ /v1/releases/android/operations/:id/fail
+  ~^/v1/community/posts/[^/]+/toggle\-favorite/?$ /v1/community/posts/:id/toggle-favorite
+  ~^/v1/community/posts/[^/]+/comment\-threads/?$ /v1/community/posts/:id/comment-threads
+  ~^/v1/community/comments/[^/]+/toggle\-like/?$ /v1/community/comments/:id/toggle-like
+  ~^/v1/community/posts/[^/]+/toggle\-like/?$ /v1/community/posts/:id/toggle-like
+  ~^/v1/timetables/members/[^/]+/leave/?$ /v1/timetables/members/:id/leave
+  ~^/v1/community/posts/[^/]+/comments/?$ /v1/community/posts/:id/comments
+  ~^/v1/community/posts/[^/]+/favorite/?$ /v1/community/posts/:id/favorite
+  ~^/v1/community/posts/[^/]+/pending/?$ /v1/community/posts/:id/pending
+  ~^/v1/notifications/[^/]+/dismiss/?$ /v1/notifications/:id/dismiss
+  ~^/v1/community/posts/[^/]+/abort/?$ /v1/community/posts/:id/abort
+  ~^/v1/announcements/[^/]+/dismiss/?$ /v1/announcements/:id/dismiss
+  ~^/v1/community/posts/[^/]+/like/?$ /v1/community/posts/:id/like
+  ~^/v1/catalog/[^/]+/[^/]+/rating/?$ /v1/catalog/:kind/:id/rating
+  ~^/v1/community/polls/[^/]+/vote/?$ /v1/community/polls/:id/vote
+  ~^/v1/timetables/members/[^/]+/?$ /v1/timetables/members/:id
+  ~^/v1/community/comments/[^/]+/?$ /v1/community/comments/:id
+  ~^/v1/announcements/[^/]+/read/?$ /v1/announcements/:id/read
+  ~^/v1/notifications/[^/]+/read/?$ /v1/notifications/:id/read
+  ~^/v1/catalog/[^/]+/ratings/?$ /v1/catalog/:kind/ratings
+  ~^/v1/releases/android/[^/]+/?$ /v1/releases/android/:id
+  ~^/v1/community/blocks/[^/]+/?$ /v1/community/blocks/:id
   ~^/v1/releases/artifacts/.*/?$ /v1/releases/artifacts/*
+  ~^/v1/community/posts/[^/]+/?$ /v1/community/posts/:id
+  ~^/v1/community/polls/[^/]+/?$ /v1/community/polls/:id
   ~^/api/releases/android/.*/?$ /api/releases/android/*
+  ~^/v1/catalog/[^/]+/?$ /v1/catalog/:kind
+  ~^/v1/runtime/[^/]+/?$ /v1/runtime/:kind
+  ~^/v1/events/[^/]+/?$ /v1/events/:scope
+  ~^/v1/profiles/[^/]+/?$ /v1/profiles/:id
   ~^/releases/.*/?$ /releases/*
   ~^/v1/auth/.*/?$ /v1/auth/*
   ~^/assets/.*/?$ /assets/*

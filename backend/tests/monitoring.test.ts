@@ -70,6 +70,19 @@ describe("monitoring privacy, range and sources", () => {
       )
       .map((row) => row[1]);
     expect(new Set(mapped)).toEqual(new Set(routeTemplates));
+    const patterns = text
+      .split("\n")
+      .map((line) => line.trim().split(/\s+/))
+      .filter((row) => row[0].startsWith("~"));
+    const routeFor = (path: string) =>
+      patterns.find((row) => new RegExp(row[0].slice(1)).test(path))?.[1] ??
+      "/:unmatched";
+    expect(routeFor("/v1/catalog/suggestions")).toBe("/v1/catalog/suggestions");
+    expect(routeFor("/v1/catalog/cafes")).toBe("/v1/catalog/:kind");
+    expect(routeFor("/v1/releases/android/latest")).toBe(
+      "/v1/releases/android/latest",
+    );
+    expect(routeFor("/share/private-invite-token")).toBe("/share/*");
     for (const route of app.routes.filter((route) => route.method !== "ALL"))
       expect(routeTemplates).toContain(route.path);
     expect(
@@ -210,11 +223,26 @@ describe("monitoring privacy, range and sources", () => {
   });
 });
 describe("alert lifecycle and mail ledger", () => {
-  it('marks a report incomplete when a later restart reveals a gap covering its whole period',()=>{
-    const {store}=database();store.set('startedAt',now-3*day);store.set('lastCollection',now);store.set('collectionError',null);
-    store.ingest([{timestamp:now+30_000,source:'monitor',event:'collection_gap',level:'warning',duration:2*day/1000}]);
-    queueDailyReport(store,'production',now);
-    expect(JSON.parse((store.db.prepare('SELECT summary FROM reports').get() as any).summary).complete).toBe(false);
+  it("marks a report incomplete when a later restart reveals a gap covering its whole period", () => {
+    const { store } = database();
+    store.set("startedAt", now - 3 * day);
+    store.set("lastCollection", now);
+    store.set("collectionError", null);
+    store.ingest([
+      {
+        timestamp: now + 30_000,
+        source: "monitor",
+        event: "collection_gap",
+        level: "warning",
+        duration: (2 * day) / 1000,
+      },
+    ]);
+    queueDailyReport(store, "production", now);
+    expect(
+      JSON.parse(
+        (store.db.prepare("SELECT summary FROM reports").get() as any).summary,
+      ).complete,
+    ).toBe(false);
   });
   it("requires continuous observations for both firing and recovery after an unknown interval", () => {
     const { store } = database(),
