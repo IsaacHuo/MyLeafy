@@ -98,10 +98,12 @@ final class SchoolLoginReliabilityTests: XCTestCase {
         XCTAssertEqual(fields["RANDOMCODE"], "a1b2")
         XCTAssertTrue(stub.requests.dropFirst()
             .allSatisfy { $0.value(forHTTPHeaderField: "Cookie")?.contains("JSESSIONID=login-test") == true })
-        XCTAssertEqual(
-            SchoolLoginCredentialStore.load(campusID: .bjfu, portal: .undergraduate)?.password,
-            " Ab9+%&#=Z7 "
-        )
+        XCTAssertEqual(stub.savedCredentials.count, 1)
+        let saved = try XCTUnwrap(stub.savedCredentials.first)
+        XCTAssertEqual(saved.password, " Ab9+%&#=Z7 ")
+        XCTAssertEqual(saved.account, "2099000001")
+        XCTAssertEqual(saved.campusID, .bjfu)
+        XCTAssertEqual(saved.portal, .undergraduate)
     }
 
     func testCredentialCacheFailureDoesNotUndoVerifiedLogin() async throws {
