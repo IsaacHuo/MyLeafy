@@ -167,7 +167,10 @@ extension PerformanceRefactorTests {
 
         await viewModel.load()
         viewModel.requestStagedRefresh(after: .zero)
-        try await Task.sleep(for: .milliseconds(100))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !viewModel.hasPendingRefresh, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
         XCTAssertTrue(viewModel.hasPendingRefresh)
         XCTAssertEqual(viewModel.posts, [initialPost])

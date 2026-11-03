@@ -46,3 +46,9 @@ iOS 显式注入隔离 request loader 和凭据保存器，逐项检查保存参
 - Android 本地 Debug 构建、32 项定向 JVM 测试、双端格式、分层和 12 项 CI 规则回归通过；1,235 个共享编码向量在双端均逐项验证。
 - 首次重放的后端监控改动未影响移动端源码；随后主线新增了 iOS 我的菜单及 Android 分享卡片（`768baea`），因此保留这些改动并重新执行组合源码的 iOS Full validation。登录相关实现、用例和共享 fixtures 与上述已验证版本保持一致，组合结果另行记录。最终精确提交基础 CI 见 [PR #69](https://github.com/IsaacHuo/MyLeafy/pull/69)。
 - 状态为 Acceptance：真实学校账号的首次登录、重新登录、自动恢复、设备 Keychain、真机交互及正式 App 发布仍分别待验收。本轮没有使用真实学生凭据或发布 App。
+
+### 与新 iOS 主线组合验证
+
+`692dbe2` 保留 `768baea` 的 iOS 菜单与分享卡片后，基础 CI [41581880923](https://github.com/IsaacHuo/MyLeafy/actions/runs/41581880923) 通过；iOS Full validation [41581882685](https://github.com/IsaacHuo/MyLeafy/actions/runs/41581882685) 构建通过，798 项中 796 通过、1 既有跳过、1 失败。全部登录用例通过，唯一失败是既有 `testCommunityFeedStagesLatestSnapshotUntilUserAppliesIt` 的 `XCTAssertTrue`。
+
+该测试在异步暂存刷新后固定睡眠 100ms 再断言，而刷新经过会话、并发帖子/投票和 actor 调度；社区生产代码及该用例与已通过的独立修复版本完全一致。同文件的合并刷新用例已采用最多 3 秒、每 10ms 检查完成条件的方式。只将失败用例改用相同的有界条件等待，保留暂存、未自动应用、用户应用和缓存的全部断言，不修改社区生产行为或跳过用例。调整后重新验证组合源码。
