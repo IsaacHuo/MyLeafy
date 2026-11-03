@@ -39,10 +39,10 @@ iOS 显式注入隔离 request loader 和凭据保存器，逐项检查保存参
 
 将凭据保存与网络一样作为显式注入的测试依赖，检查密码/账号/校园/门户原样传递、真实拒绝或会话验证失败不保存，以及缓存保存失败不回滚有效会话。正式默认仍调用既有 `SchoolLoginCredentialStore.save`，没有放宽登录成功判定或删除原有传输/会话断言。修正后重新对精确提交执行 CI 和 iOS Full validation。
 
-### 最终验证
+### 登录修复独立验证
 
 - `bf58f2dbdf09882e58f17fd330ce5c2bf76107bf` 的基础 CI [41576709814](https://github.com/IsaacHuo/MyLeafy/actions/runs/41576709814) 通过。
 - 同一提交的 iOS Full validation [41576651654](https://github.com/IsaacHuo/MyLeafy/actions/runs/41576651654) 通过：iOS 17 最低目标构建成功，796 项中 795 通过、0 失败、1 项既有跳过；新增的 16 项登录可靠性用例全部通过。没有新增跳过或降低认证断言。
 - Android 本地 Debug 构建、32 项定向 JVM 测试、双端格式、分层和 12 项 CI 规则回归通过；1,235 个共享编码向量在双端均逐项验证。
-- 主线后续仅新增后端监控改动，重放后已通过 Git diff 确认移动端代码、测试、共享 fixtures、Xcode 项目及 iOS 验证入口与上述已验证提交完全一致；本次补充只有验证文档，不重复已通过的移动端编译/回归。最终分支精确提交的基础 CI 见 [PR #69](https://github.com/IsaacHuo/MyLeafy/pull/69)。
+- 首次重放的后端监控改动未影响移动端源码；随后主线新增了 iOS 我的菜单及 Android 分享卡片（`768baea`），因此保留这些改动并重新执行组合源码的 iOS Full validation。登录相关实现、用例和共享 fixtures 与上述已验证版本保持一致，组合结果另行记录。最终精确提交基础 CI 见 [PR #69](https://github.com/IsaacHuo/MyLeafy/pull/69)。
 - 状态为 Acceptance：真实学校账号的首次登录、重新登录、自动恢复、设备 Keychain、真机交互及正式 App 发布仍分别待验收。本轮没有使用真实学生凭据或发布 App。
