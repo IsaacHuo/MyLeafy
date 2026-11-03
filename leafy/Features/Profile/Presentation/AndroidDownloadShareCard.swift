@@ -13,9 +13,12 @@ enum AndroidDownloadShareContent {
     }
 
     static func card(language: AppLanguagePreference) throws -> AndroidDownloadShareCard {
-        try AndroidDownloadShareCard(
+        guard let iconImage = UIImage(named: "AndroidShareAppIcon") else {
+            throw AndroidDownloadShareCardError.renderFailed
+        }
+        return try AndroidDownloadShareCard(
             language: language,
-            iconImage: LeafyAppIconManager.primaryIconImage(),
+            iconImage: iconImage,
             qrImage: qrCode()
         )
     }
@@ -73,7 +76,7 @@ struct AndroidDownloadShareCard: View {
                 .padding(.top, 6)
 
             HStack(spacing: 0) {
-                feature("calendar", title: "课表")
+                feature("calendar", title: "androidShare.feature.timetable")
                 featureDivider
                 feature("calendar.badge.checkmark", title: "日程")
                 featureDivider

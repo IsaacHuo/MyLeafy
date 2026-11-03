@@ -13,7 +13,9 @@ final class AndroidDownloadShareTests: XCTestCase {
 
     func testPortraitPNGKeepsOfficialDownloadQRCodeReadableInBothLanguages() throws {
         for language in [AppLanguagePreference.zhHans, .enUS] {
-            let url = try AndroidDownloadShareCardRenderer.render(AndroidDownloadShareContent.card(language: language))
+            let card = try AndroidDownloadShareContent.card(language: language)
+            XCTAssertGreaterThanOrEqual(card.iconImage.cgImage?.width ?? 0, 300)
+            let url = try AndroidDownloadShareCardRenderer.render(card)
             defer { AndroidDownloadShareCardRenderer.deleteRenderedFile(url) }
             let data = try Data(contentsOf: url)
             XCTAssertEqual(Array(data.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
