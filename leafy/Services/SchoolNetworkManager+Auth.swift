@@ -208,7 +208,7 @@ extension SchoolNetworkManager {
         updatePersistedCookies(from: httpResponse, requestURL: loginUrl)
         persistLandingURL(httpResponse.url)
 
-        let html = try decodedHTML(from: data)
+        let html = (try? decodedHTML(from: data)) ?? ""
         if let message = extractLoginMessage(from: html) {
             throw SchoolNetworkError.loginFailed(message)
         }

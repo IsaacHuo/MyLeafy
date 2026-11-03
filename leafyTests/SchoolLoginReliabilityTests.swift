@@ -128,10 +128,21 @@ final class SchoolLoginReliabilityTests: XCTestCase {
         XCTAssertNil(manager.authenticatedEduID)
     }
 
+    func testEmptyLoginResponseCanSucceedOnlyWithVerifiedSession() async throws {
+        let stub = SchoolLoginStub()
+        stub.loginHTML = ""
+        let manager = makeManager(stub)
+        let succeeded = try await login(manager)
+        XCTAssertTrue(succeeded)
+        XCTAssertTrue(manager.isLoggedIn)
+        XCTAssertEqual(stub.requests.filter { $0.url?.path.contains("xsMain.jsp") == true }.count, 1)
+    }
+
     func testEmptyLoginAndHTTPFailureCannotEstablishIdentity() async throws {
         for status in [200, 503] {
             let stub = SchoolLoginStub()
             stub.loginHTML = ""
+            stub.verificationHTML = "<html>学校维护中</html>"
             stub.loginStatus = status
             let manager = makeManager(stub)
             do { _ = try await login(manager); XCTFail("Invalid response cannot establish identity") } catch {}
