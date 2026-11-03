@@ -4876,6 +4876,16 @@
         }
       }
     },
+    "分享卡片写入失败：%@" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to save the share card: %@"
+          }
+        }
+      }
+    },
     "分享卡片图片" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5125,17 +5135,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Delete"
-          }
-        }
-      }
-    },
-    "删除 MyLeafy 账户" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete MyLeafy account"
           }
         }
       }
@@ -5428,6 +5427,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Delete Record"
+          }
+        }
+      }
+    },
+    "删除账户" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete account"
           }
         }
       }
@@ -5958,6 +5967,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reference ratio: %arg"
+          }
+        }
+      }
+    },
+    "反馈举报" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feedback and reports"
           }
         }
       }
@@ -10709,6 +10728,16 @@
         }
       }
     },
+    "扫码前往官网下载" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan to download from our website"
+          }
+        }
+      }
+    },
     "批量导入课表" : {
       "localizations" : {
         "en-US" : {
@@ -10736,6 +10765,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Find me on Xiaohongshu. Opens externally."
+          }
+        }
+      }
+    },
+    "把 MyLeafy 分享给安卓同学" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share MyLeafy with Android friends"
           }
         }
       }
@@ -12070,6 +12109,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unable to generate image"
+          }
+        }
+      }
+    },
+    "无法生成安卓版分享卡片，请重试。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to generate the Android share card. Please try again."
           }
         }
       }
@@ -19584,6 +19633,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Timetable, grades, and other academic information need to be accessed through the campus network. After connecting to the campus network, return to MyLeafy to log in to the academic system and sync timetable, grades, and exam schedules, or check for available classrooms."
+          }
+        }
+      }
+    },
+    "课表、日程与校园生活" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timetables, plans and campus life"
           }
         }
       }

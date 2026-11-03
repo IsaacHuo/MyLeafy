@@ -1,71 +1,15 @@
-import CoreImage.CIFilterBuiltins
 import LinkPresentation
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
 @MainActor
-enum AndroidDownloadShareContent {
-    static func title(language: AppLanguagePreference) -> String {
-        L10n.text("MyLeafy 安卓版", language: language)
-    }
-
-    static func snapshot(language: AppLanguagePreference) throws -> CommunityPostCardSnapshot {
-        guard let qrData = try qrCode().pngData(),
-              let iconData = try LeafyAppIconManager.primaryIconImage().pngData() else {
-            throw CommunityPostCardGenerationError.renderFailed
-        }
-        return CommunityPostCardSnapshot(
-            authorName: AppBrand.displayName,
-            avatarData: iconData,
-            dateText: "Android",
-            category: L10n.text("官方下载", language: language),
-            title: title(language: language),
-            body: L10n.text(
-                "MyLeafy 安卓版支持课表、成绩查询、个人日程和校园社区。扫描二维码即可访问官方下载页面，获取安装包与使用说明。欢迎分享给使用安卓手机的同学。",
-                language: language
-            ),
-            attachmentNames: [],
-            photoData: [qrData],
-            isAnonymous: false,
-            avatarStyle: .appIcon
-        )
-    }
-
-    static func qrCode() throws -> UIImage {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(LeafyExternalLinks.androidDownload.absoluteString.utf8)
-        filter.correctionLevel = "M"
-        guard let output = filter.outputImage else { throw CommunityPostCardGenerationError.renderFailed }
-        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
-        guard let cgImage = CIContext().createCGImage(scaled, from: scaled.extent) else {
-            throw CommunityPostCardGenerationError.renderFailed
-        }
-        let size = CGSize(width: CGFloat(cgImage.width + 32), height: CGFloat(cgImage.height + 32))
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        return UIGraphicsImageRenderer(size: size, format: format).image { context in
-            UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            context.cgContext.interpolationQuality = .none
-            UIImage(cgImage: cgImage).draw(in: CGRect(
-                x: 16,
-                y: 16,
-                width: CGFloat(cgImage.width),
-                height: CGFloat(cgImage.height)
-            ))
-        }
-    }
-}
-
-@MainActor
 final class AndroidDownloadLinkItemSource: NSObject, UIActivityItemSource {
     let title: String
-    let cardURL: URL
-    let appIcon: UIImage
+    let cardURL: URL?
+    let appIcon: UIImage?
 
-    init(title: String, cardURL: URL, appIcon: UIImage) {
+    init(title: String, cardURL: URL? = nil, appIcon: UIImage? = nil) {
         self.title = title
         self.cardURL = cardURL
         self.appIcon = appIcon
@@ -101,8 +45,8 @@ final class AndroidDownloadLinkItemSource: NSObject, UIActivityItemSource {
         metadata.originalURL = LeafyExternalLinks.androidDownload
         metadata.url = LeafyExternalLinks.androidDownload
         metadata.title = title
-        metadata.imageProvider = NSItemProvider(contentsOf: cardURL)
-        metadata.iconProvider = NSItemProvider(object: appIcon)
+        if let cardURL { metadata.imageProvider = NSItemProvider(contentsOf: cardURL) }
+        if let appIcon { metadata.iconProvider = NSItemProvider(object: appIcon) }
         return metadata
     }
 }
@@ -123,44 +67,21 @@ struct AndroidDownloadShareView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.section) {
-                Text(L10n.text("向使用安卓手机的同学分享 MyLeafy 下载页面或介绍卡片。", language: language))
-                    .leafyBody()
-                    .foregroundStyle(AppTheme.secondaryText)
-
-                HStack(spacing: AppSpacing.compact) {
-                    Button {
-                        guard let cardURL, let iconImage else { return }
-                        shareItems = ShareItems(items: [AndroidDownloadLinkItemSource(
-                            title: AndroidDownloadShareContent.title(language: language), cardURL: cardURL,
-                            appIcon: iconImage
-                        )])
-                    } label: {
-                        Label(L10n.text("分享下载链接", language: language), systemImage: "square.and.arrow.up")
-                            .font(.subheadline)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(cardURL == nil)
-
-                    Button {
-                        guard let cardURL else { return }
-                        shareItems = ShareItems(items: [cardURL])
-                    } label: {
-                        Label(L10n.text("分享卡片图片", language: language), systemImage: "photo")
-                            .font(.subheadline)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(cardURL == nil)
-                }
+                Text(L10n.text("把 MyLeafy 分享给安卓同学", language: language))
+                    .font(.title3.bold())
+                    .foregroundStyle(AppTheme.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let cardImage {
                     Image(uiImage: cardImage)
                         .resizable()
                         .scaledToFit()
-                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .strokeBorder(.black.opacity(0.05), lineWidth: 0.5)
+                        }
+                        .shadow(color: .black.opacity(0.04), radius: 12, y: 4)
                         .accessibilityLabel(L10n.text("MyLeafy 安卓版介绍卡片，含官网下载二维码", language: language))
                 } else if let errorMessage {
                     ContentUnavailableView {
@@ -175,20 +96,58 @@ struct AndroidDownloadShareView: View {
                         .frame(maxWidth: .infinity, minHeight: 240)
                 }
 
+                VStack(spacing: 12) {
+                    Button {
+                        shareItems = ShareItems(items: [AndroidDownloadLinkItemSource(
+                            title: AndroidDownloadShareContent.title(language: language),
+                            cardURL: cardURL, appIcon: iconImage
+                        )])
+                    } label: {
+                        Text(L10n.text("分享下载链接", language: language))
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .padding(.vertical, 2)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
+                    .tint(AppTheme.accentEmphasis)
+
+                    Button {
+                        guard let cardURL else { return }
+                        shareItems = ShareItems(items: [cardURL])
+                    } label: {
+                        Text(L10n.text("分享卡片图片", language: language))
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(AppTheme.primaryText)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .padding(.vertical, 2)
+                            .contentShape(Capsule())
+                            .overlay { Capsule().strokeBorder(AppTheme.secondaryText.opacity(0.3), lineWidth: 0.5) }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(cardURL == nil)
+                    .opacity(cardURL == nil ? 0.5 : 1)
+                }
+                .padding(.top, 6)
+
                 Link(L10n.text("打开官网下载页", language: language), destination: LeafyExternalLinks.androidDownload)
-                Text(L10n.text("链接可以直接打开下载页；图片卡片可以在微信中长按识别二维码。", language: language))
-                    .font(.footnote)
-                    .foregroundStyle(AppTheme.secondaryText)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(AppTheme.accentEmphasis)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
             .padding(AppSpacing.page)
-            .frame(maxWidth: 480)
+            .frame(maxWidth: 400)
             .frame(maxWidth: .infinity)
         }
         .background(LeafyPageBackground())
         .navigationTitle(L10n.text("分享安卓版", language: language))
         .leafyInlineNavigationTitle()
-        .task(id: language) { generateCard() }
-        .onDisappear { CommunityPostCardGenerator.deleteRenderedFile(cardURL) }
+        .task(id: language) {
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            generateCard()
+        }
+        .onDisappear { AndroidDownloadShareCardRenderer.deleteRenderedFile(cardURL) }
         .leafySheet(item: $shareItems) { payload in
             ShareSheet(activityItems: payload.items)
         }
@@ -197,18 +156,18 @@ struct AndroidDownloadShareView: View {
     private func generateCard() {
         errorMessage = nil
         do {
-            let snapshot = try AndroidDownloadShareContent.snapshot(language: language)
-            let newURL = try CommunityPostCardGenerator.render(snapshot)
+            let card = try AndroidDownloadShareContent.card(language: language)
+            iconImage = card.iconImage
+            let newURL = try AndroidDownloadShareCardRenderer.render(card)
             guard let image = UIImage(contentsOfFile: newURL.path) else {
-                CommunityPostCardGenerator.deleteRenderedFile(newURL)
-                throw CommunityPostCardGenerationError.renderFailed
+                AndroidDownloadShareCardRenderer.deleteRenderedFile(newURL)
+                throw AndroidDownloadShareCardError.renderFailed
             }
-            CommunityPostCardGenerator.deleteRenderedFile(cardURL)
+            AndroidDownloadShareCardRenderer.deleteRenderedFile(cardURL)
             cardURL = newURL
             cardImage = image
-            iconImage = try LeafyAppIconManager.primaryIconImage()
         } catch {
-            CommunityPostCardGenerator.deleteRenderedFile(cardURL)
+            AndroidDownloadShareCardRenderer.deleteRenderedFile(cardURL)
             cardURL = nil
             cardImage = nil
             iconImage = nil

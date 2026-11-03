@@ -128,7 +128,6 @@ struct ProfileDeveloperContactCard: View {
                 LeafyDisclosureIndicator()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

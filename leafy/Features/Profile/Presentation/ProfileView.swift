@@ -255,6 +255,7 @@ struct ProfileView: View {
 
             Section {
                 ProfileDeveloperContactCard()
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
         }
         .leafyInsetGroupedListStyle()
@@ -312,7 +313,7 @@ struct ProfileView: View {
             feedbackInitialBody = ""
             showingFeedbackSheet = true
         } label: {
-            ProfileMenuRow(icon: "bubble.left.and.bubble.right.fill", title: "反馈与举报", showsDisclosure: true)
+            ProfileMenuRow(icon: "bubble.left.and.bubble.right.fill", title: "反馈举报", showsDisclosure: true)
         }
         .profileCompactMenuRow()
 
@@ -404,7 +405,7 @@ struct ProfileView: View {
         Button(
             isDeletingAccount
                 ? L10n.text("正在删除账户…", language: leafyLanguage)
-                : L10n.text("删除 MyLeafy 账户", language: leafyLanguage),
+                : L10n.text("删除账户", language: leafyLanguage),
             role: .destructive
         ) {
             showingDeleteAccountConfirmation = true
@@ -1506,7 +1507,6 @@ private struct LeafyGuideAndDataSecurityView: View {
         ManualChapter(
             icon: "leaf.fill",
             title: "开始使用",
-            detail: "产品定位与主要入口",
             intro: "\(AppBrand.displayName) 面向北京林业大学，根导航包含课表、社区、日迹、校园和我的。",
             rows: [
                 ManualInfo(
@@ -1533,7 +1533,6 @@ private struct LeafyGuideAndDataSecurityView: View {
         ManualChapter(
             icon: "calendar",
             title: "课表与学年",
-            detail: "周次、学年范围和刷新",
             intro: "课表一次浏览一个学年，从秋季学期开始，到下一学年开始前一天结束。",
             rows: [
                 ManualInfo(title: "学年范围", body: "当前学年包含秋季学期、寒假、春季学期和暑假。暑假最后一周停在学年边界，不会继续滑入下一学年第 1 周。"),
@@ -1554,7 +1553,6 @@ private struct LeafyGuideAndDataSecurityView: View {
         ManualChapter(
             icon: "note.text",
             title: "日迹",
-            detail: "随记、日程与推送",
             intro: "日迹顶部提供随记、日程和推送，内容按当前校园身份保存在本机。",
             rows: [
                 ManualInfo(
@@ -1588,7 +1586,6 @@ private struct LeafyGuideAndDataSecurityView: View {
         ManualChapter(
             icon: "wifi",
             title: "数据来源",
-            detail: "教务同步与本地维护",
             intro: "课表、成绩等教务数据来自北京林业大学强智教务系统。查询由用户主动发起，解析结果按功能保存在本机。",
             rows: [
                 ManualInfo(title: "校园网要求", body: "北林强智教务系统通常只能通过校园网或学校认可的 VPN 访问。浏览器无法打开教务系统时，App 也无法同步相关数据。"),
@@ -1606,7 +1603,6 @@ private struct LeafyGuideAndDataSecurityView: View {
         ManualChapter(
             icon: "arrow.triangle.2.circlepath",
             title: "同步与缓存",
-            detail: "本地缓存和重试顺序",
             intro: "最近一次成功同步的教务数据保存在本机。网络或学校系统异常时，现有缓存仍可查看。",
             rows: [
                 ManualInfo(title: "教务缓存", body: "课表、成绩、考试安排、教学计划、培养方案和空闲教室查询结果按功能保存在本机，供离线查看。"),
@@ -1628,7 +1624,6 @@ private struct LeafyGuideAndDataSecurityView: View {
         ManualChapter(
             icon: "person.2.fill",
             title: "社区、反馈与共享课表",
-            detail: "社区数据与主动发布内容",
             intro: "\(AppBrand.displayName) 社区服务与北林教务系统相互独立。学校身份用于确认校园归属，社区资料用于展示、互动、通知和安全处理。",
             rows: [
                 ManualInfo(
@@ -1657,7 +1652,6 @@ private struct LeafyGuideAndDataSecurityView: View {
         ManualChapter(
             icon: "lock.shield.fill",
             title: "数据安全边界",
-            detail: "本机、学校和社区服务",
             intro: "数据分别由本机、学校系统和社区服务处理。清除缓存、退出登录或撤销共享前，请先确认对应的数据范围。",
             rows: [
                 ManualInfo(title: "教务账号和密码", body: "教务账号和密码仅用于向北林强智教务系统发起登录请求，不用于社区资料，也不会作为帖子、评论、反馈或共享课表内容保存。"),
@@ -1685,7 +1679,6 @@ private struct LeafyGuideAndDataSecurityView: View {
         ManualChapter(
             icon: "questionmark.circle.fill",
             title: "常见问题",
-            detail: "网络、登录与数据问题",
             intro: "常见原因包括网络不可达、教务会话过期、验证码失效、学校页面变化、缓存未更新或社区服务暂时不可用。",
             rows: [
                 ManualInfo(title: "课表或成绩无法刷新", body: "确认当前网络能够访问北林教务。出现重新登录提示时，完成认证后返回功能页刷新。浏览器也无法访问时，请等待网络或学校服务恢复。"),
@@ -1716,13 +1709,14 @@ private struct LeafyGuideAndDataSecurityView: View {
                     Button {
                         showingCommunityTermsSheet = true
                     } label: {
-                        ManualActionRow(
+                        ProfileMenuRow(
                             icon: "checkmark.shield.fill",
                             title: "社区条约",
-                            detail: "查看或更新同意状态"
+                            showsDisclosure: true
                         )
                     }
                     .buttonStyle(.plain)
+                    .profileCompactMenuRow()
                 }
                 .listRowBackground(AppTheme.cardBackground)
             }
@@ -1732,13 +1726,15 @@ private struct LeafyGuideAndDataSecurityView: View {
                     NavigationLink {
                         ManualChapterDetailView(chapter: chapter)
                     } label: {
-                        ManualDirectoryRow(chapter: chapter)
+                        ProfileMenuRow(icon: chapter.icon, title: chapter.title)
                     }
+                    .profileCompactMenuRow()
                 }
             }
         }
         .leafyInsetGroupedListStyle()
         .leafyCompactListSectionSpacing()
+        .environment(\.defaultMinListRowHeight, 54)
         .contentMargins(.top, 0, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(LeafyPageBackground())
@@ -1767,7 +1763,6 @@ private struct ManualChapter: Identifiable {
     var id: String { title }
     let icon: String
     let title: String
-    let detail: String
     let intro: String
     let rows: [ManualInfo]
     let steps: [ManualStep]
@@ -1799,68 +1794,6 @@ private struct ManualIntroBlock: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 0)
-    }
-}
-
-private struct ManualDirectoryRow: View {
-    let chapter: ManualChapter
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: chapter.icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppTheme.accent)
-                .frame(width: 24, height: 24)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(chapter.title)
-                    .leafyBody()
-                    .foregroundStyle(AppTheme.primaryText)
-                    .lineLimit(1)
-
-                Text(chapter.detail)
-                    .microCaption()
-                    .foregroundStyle(AppTheme.tertiaryText)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-private struct ManualActionRow: View {
-    let icon: String
-    let title: String
-    let detail: String
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppTheme.accent)
-                .frame(width: 24, height: 24)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .leafyBody()
-                    .foregroundStyle(AppTheme.primaryText)
-                    .lineLimit(1)
-
-                Text(detail)
-                    .microCaption()
-                    .foregroundStyle(AppTheme.tertiaryText)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.tertiaryText)
-        }
-        .padding(.vertical, 4)
     }
 }
 
