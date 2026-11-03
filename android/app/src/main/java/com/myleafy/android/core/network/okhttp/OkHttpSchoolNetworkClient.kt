@@ -179,16 +179,13 @@ class OkHttpSchoolNetworkClient(
                 SchoolPageDetector.extractLoginMessage(html)?.let {
                     throw SchoolNetworkError.LoginFailed(it)
                 }
-                if (SchoolPageDetector.isLoginPage(html)) {
-                    throw SchoolNetworkError.LoginFailed("登录失败，请检查学号与验证码")
-                }
                 // Verify the candidate cookie jar before committing identity or touching the old session.
                 val verification = requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()
                 executeAuthenticationCancellable(verification).use {
                     if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${it.code}）")
                     val page = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
-                    if (!SchoolPageDetector.isAuthenticatedResponse(it.request.url.toString(), page)) {
-                        throw SchoolNetworkError.LoginFailed("登录失败，请重试")
+                    if (!SchoolPageDetector.isAuthenticatedResponse("", page)) {
+                        throw SchoolNetworkError.LoginFailed("登录请求已发送，但未能确认登录成功。请刷新验证码后重试。")
                     }
                 }
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
@@ -433,7 +430,9 @@ class OkHttpSchoolNetworkClient(
         return executeAuthenticationCancellable(request).use {
             if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${it.code}）")
             val text = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf()).trim()
-            check(text.isNotBlank()) { "未获取到登录 key" }
+            if (!SchoolLoginEncoder.isValidKey(text)) {
+                throw SchoolNetworkError.Unexpected("学校登录密钥无效，请刷新验证码后重试。")
+            }
             text
         }
     }

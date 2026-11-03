@@ -28,6 +28,7 @@ enum SchoolPortal: String, CaseIterable, Codable, Identifiable, Sendable {
 
 enum SchoolNetworkError: LocalizedError {
     case loginFailed(String)
+    case loginUnavailable(String)
     case campusNetworkRequired
     case sessionExpired
     case featureUnavailable(String)
@@ -37,7 +38,7 @@ enum SchoolNetworkError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .loginFailed(let message):
+        case .loginFailed(let message), .loginUnavailable(let message):
             return message
         case .campusNetworkRequired:
             return L10n.text("教务系统只能在校园网内访问。请连接 bjfu-wifi 后再更新；已缓存的数据仍可离线查看。")
@@ -120,6 +121,14 @@ final class SchoolNetworkManager: ObservableObject {
     let graduateBaseURL = CampusDescriptor.bjfu.graduateBaseURL.absoluteString
     var sessionGeneration: UInt64 = 0
     var session: URLSession = makeSession()
+    var authenticationOperationID: UUID?
+    private let requestLoader: (@MainActor (URLRequest) async throws -> (Data, URLResponse))?
+
+    func loadSchoolRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        if let requestLoader { return try await requestLoader(request) }
+        guard !AppRuntimeEnvironment.isRunningUnitTests else { throw URLError(.unsupportedURL) }
+        return try await session.data(for: request)
+    }
 
     static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
@@ -136,7 +145,8 @@ final class SchoolNetworkManager: ObservableObject {
         return URLSession(configuration: config)
     }
 
-    init() {
+    init(requestLoader: (@MainActor (URLRequest) async throws -> (Data, URLResponse))? = nil) {
+        self.requestLoader = requestLoader
         let currentIdentity = CampusIdentityStore.currentIdentity()
         let portal = SchoolPortal(rawValue: UserDefaults.standard
             .string(forKey: CampusScopedDefaults.key("schoolPortal")) ?? "") ?? .undergraduate

@@ -377,6 +377,7 @@ private struct SchoolReauthenticationSheet: View {
             .onDisappear {
                 captchaTask?.cancel()
                 loginTask?.cancel()
+                networkManager.cancelAuthenticationOperation()
                 clearSensitiveFields()
             }
             .onChange(of: account) { _, newValue in
@@ -451,6 +452,7 @@ private struct SchoolReauthenticationSheet: View {
                 .leafyOneTimeCodeContentType()
 
             Button {
+                guard !isCaptchaLoading, !isLoggingIn else { return }
                 captchaTask?.cancel()
                 captchaTask = Task { await fetchCaptcha(resetError: true) }
             } label: {
@@ -487,6 +489,7 @@ private struct SchoolReauthenticationSheet: View {
 
     private var submitButton: some View {
         Button {
+            guard canSubmit else { return }
             loginTask?.cancel()
             loginTask = Task { await submitLogin() }
         } label: {
@@ -518,7 +521,7 @@ private struct SchoolReauthenticationSheet: View {
 
     @MainActor
     private func fetchCaptcha(resetError: Bool) async {
-        guard !isCaptchaLoading else { return }
+        guard !isCaptchaLoading, !isLoggingIn else { return }
         isCaptchaLoading = true
         defer { isCaptchaLoading = false }
 
@@ -564,6 +567,7 @@ private struct SchoolReauthenticationSheet: View {
                 showsCredentialFields = true
                 errorMessage = L10n.text("登录请求已发送，但未能确认登录成功。请重试。", language: leafyLanguage)
                 captchaCode = ""
+                isLoggingIn = false
                 await fetchCaptcha(resetError: false)
                 return
             }
@@ -577,6 +581,7 @@ private struct SchoolReauthenticationSheet: View {
             showsCredentialFields = true
             errorMessage = error.localizedDescription
             captchaCode = ""
+            isLoggingIn = false
             await fetchCaptcha(resetError: false)
         }
     }

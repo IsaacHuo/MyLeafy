@@ -1,0 +1,57 @@
+[
+  {
+    "name": "announcement",
+    "html": "<html><form action=\"Logon.do?method=logon\"><input name=\"RANDOMCODE\"></form><script>function check(){alert(\"请输入完整的登陆信息！\");}</script><font color=\"red\"></font><font color=\"red\">本平台为互联网非涉密平台，严禁处理、传输国家秘密、工作秘密及敏感信息。</font></html>",
+    "expected": null
+  },
+  {
+    "name": "captcha_after_validation",
+    "html": "<html><form action=\"Logon.do?method=logon\"><input name=\"RANDOMCODE\"></form><script>function check(){alert(\"请输入完整的登陆信息！\");}</script><font color=\"red\"></font><font color=\"red\">本平台为互联网非涉密平台，严禁处理、传输国家秘密、工作秘密及敏感信息。</font></html><script>alert('验证码错误')</script>",
+    "expected": "验证码错误"
+  },
+  {
+    "name": "credentials",
+    "html": "<html><form action=\"Logon.do?method=logon\"><input name=\"RANDOMCODE\"></form><script>function check(){alert(\"请输入完整的登陆信息！\");}</script><font color=\"red\">账号或密码错误</font><font color=\"red\">本平台为互联网非涉密平台，严禁处理、传输国家秘密、工作秘密及敏感信息。</font></html>",
+    "expected": "账号或密码错误"
+  },
+  {
+    "name": "locked",
+    "html": "<html><form action=\"Logon.do?method=logon\"><input name=\"RANDOMCODE\"></form><script>function check(){alert(\"请输入完整的登陆信息！\");}</script><font color=\"red\"></font><font color=\"red\">本平台为互联网非涉密平台，严禁处理、传输国家秘密、工作秘密及敏感信息。</font></html><script>showMsg('账号已锁定')</script>",
+    "expected": "账号已锁定"
+  },
+  {
+    "name": "second_red_font",
+    "html": "<html><form action=\"Logon.do?method=logon\"><input name=\"RANDOMCODE\"></form><script>function check(){alert(\"请输入完整的登陆信息！\");}</script><font color=\"red\"></font><font color=\"red\">本平台为互联网非涉密平台，严禁处理、传输国家秘密、工作秘密及敏感信息。</font></html><font color=\"red\">密码已过期</font>",
+    "expected": "密码已过期"
+  },
+  {
+    "name": "second_alert",
+    "html": "<script>alert(\"请输入完整的登陆信息！\");alert(\"密码错误\");</script>",
+    "expected": "密码错误"
+  },
+  {
+    "name": "notice_spacing",
+    "html": "<font color=\"red\"> 本平台为互联网非涉密平台，\n严禁处理、传输国家秘密、工作秘密及敏感信息。 </font>",
+    "expected": null
+  },
+  {
+    "name": "unrelated_security",
+    "html": "<font color=\"red\">安全验证失败，请联系学校管理员</font>",
+    "expected": "安全验证失败，请联系学校管理员"
+  },
+  {
+    "name": "empty",
+    "html": "",
+    "expected": null
+  },
+  {
+    "name": "unknown",
+    "html": "<html><h1>服务暂不可用</h1></html>",
+    "expected": null
+  },
+  {
+    "name": "authenticated_notice",
+    "html": "<html>退出系统<font color=\"red\">本平台为互联网非涉密平台，严禁处理、传输国家秘密、工作秘密及敏感信息。</font></html>",
+    "expected": null
+  }
+]

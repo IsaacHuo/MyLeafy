@@ -2,8 +2,35 @@ package com.myleafy.android.core.network
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import kotlinx.serialization.json.*
+import java.net.URLDecoder
 
 class SchoolLoginEncoderTest {
+
+    @Test
+    fun sharedSchoolJavaScriptEncodingAndFormRoundtrip() {
+        val raw = checkNotNull(javaClass.classLoader?.getResourceAsStream("jwxt/fixtures/login_encoding.json"))
+            .bufferedReader().use { it.readText() }
+        val input = Json.parseToJsonElement(raw).jsonObject
+        val key = input.getValue("key").jsonPrimitive.content
+        val cases = input.getValue("cases").jsonArray
+        assertEquals(1235, cases.size)
+        for (item in cases) {
+            val fields = item.jsonObject
+            val encoded = SchoolLoginEncoder.encodeKey(key, fields.getValue("account").jsonPrimitive.content,
+                fields.getValue("password").jsonPrimitive.content)
+            val decoded = URLDecoder.decode(SchoolLoginEncoder.formUrlEncode(encoded), "UTF-8")
+            assertEquals(fields.getValue("encoded").jsonPrimitive.content, decoded)
+        }
+    }
+
+    @Test
+    fun malformedKeysAreRejected() {
+        for (key in listOf("no", "", "<html>error</html>", "ABC#", "#123", "ABC#12x", "ABC#１２３", "ABC#1#2")) {
+            assertEquals(false, SchoolLoginEncoder.isValidKey(key))
+            assertEquals("", SchoolLoginEncoder.encodeKey(key, "2012", "pw"))
+        }
+    }
 
     @Test
     fun encodeKeyInterleavesSecretCodeByDigitShifts() {

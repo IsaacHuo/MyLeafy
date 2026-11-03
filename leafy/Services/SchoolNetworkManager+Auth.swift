@@ -5,6 +5,24 @@ import SwiftSoup
 import UIKit
 
 extension SchoolNetworkManager {
+    private func beginAuthenticationOperation() throws -> UUID {
+        try Task.checkCancellation()
+        guard authenticationOperationID == nil else {
+            throw SchoolNetworkError.loginUnavailable("正在处理教务登录，请稍候再试。")
+        }
+        let id = UUID()
+        authenticationOperationID = id
+        return id
+    }
+
+    private func finishAuthenticationOperation(_ id: UUID) {
+        if authenticationOperationID == id { authenticationOperationID = nil }
+    }
+
+    func cancelAuthenticationOperation() {
+        if authenticationOperationID != nil { cancelInFlightRequests() }
+    }
+
     func fetchCaptcha() async throws -> (key: String, image: UIImage) {
         try await fetchCaptcha(for: currentPortal)
     }
@@ -14,6 +32,8 @@ extension SchoolNetworkManager {
             throw SchoolNetworkError.featureUnavailable("演示模式不连接学校教务验证码。")
         }
 
+        let operationID = try beginAuthenticationOperation()
+        defer { finishAuthenticationOperation(operationID) }
         let scope = CampusOperationScope()
         let previousCookies = persistedCookieValues
         do {
@@ -28,6 +48,7 @@ extension SchoolNetworkManager {
             // unreachable. Preserve the previous session so connectivity is
             // not mistaken for a real logout.
             try scope.check()
+            guard authenticationOperationID == operationID else { throw CancellationError() }
             persistedCookieValues = previousCookies
             for url in [URL(string: baseURL), URL(string: graduateBaseURL)].compactMap({ $0 }) {
                 syncPersistedCookiesToStorage(for: url)
@@ -50,10 +71,7 @@ extension SchoolNetworkManager {
         if let httpResponse = keyResponse as? HTTPURLResponse {
             updatePersistedCookies(from: httpResponse, requestURL: codeUrl)
         }
-        guard let keyString = String(data: keyData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        else {
-            throw URLError(.badServerResponse)
-        }
+        let keyString = try undergraduateLoginKey(from: keyData, response: keyResponse)
 
         guard let verifyUrl = URL(string: "\(baseURL)/verifycode.servlet") else {
             throw URLError(.badURL)
@@ -116,12 +134,7 @@ extension SchoolNetworkManager {
             updatePersistedCookies(from: httpResponse, requestURL: codeUrl)
         }
 
-        guard let keyString = String(data: keyData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !keyString.isEmpty else {
-            throw URLError(.badServerResponse)
-        }
-
-        return keyString
+        return try undergraduateLoginKey(from: keyData, response: response)
     }
 
     func performLogin(account: String, password: String, captcha: String, key: String) async throws -> Bool {
@@ -134,6 +147,8 @@ extension SchoolNetworkManager {
             throw SchoolNetworkError.featureUnavailable("请先退出演示模式，再连接校园网登录教务系统。")
         }
 
+        let operationID = try beginAuthenticationOperation()
+        defer { finishAuthenticationOperation(operationID) }
         let didLogin: Bool
         switch portal {
         case .undergraduate:
@@ -160,10 +175,11 @@ extension SchoolNetworkManager {
 
     private func performUndergraduateLogin(account: String, password: String, captcha: String) async throws -> Bool {
         let scope = CampusOperationScope()
+        let operationID = authenticationOperationID
         let trimmedAccount = account.trimmingCharacters(in: .whitespacesAndNewlines)
         let effectiveKey = try await refreshLoginKey()
         try scope.check()
-        let encodedStr = encodeKey(key: effectiveKey, account: account, password: password)
+        let encodedStr = try encodeKey(key: effectiveKey, account: trimmedAccount, password: password)
 
         guard let loginUrl = URL(string: "\(baseURL)/Logon.do?method=logon") else {
             throw URLError(.badURL)
@@ -183,41 +199,32 @@ extension SchoolNetworkManager {
         let (data, response) = try await data(for: preparedRequest(from: request))
         try scope.check()
         guard let httpResponse = response as? HTTPURLResponse else {
-            return false
+            throw SchoolNetworkError.loginUnavailable("学校登录响应无效，请刷新验证码后重试。")
         }
 
+        guard (200 ... 299).contains(httpResponse.statusCode) else {
+            throw SchoolNetworkError.loginUnavailable("学校登录服务暂时不可用（HTTP \(httpResponse.statusCode)），请稍后重试。")
+        }
         updatePersistedCookies(from: httpResponse, requestURL: loginUrl)
         persistLandingURL(httpResponse.url)
 
-        let html = (try? decodedHTML(from: data)) ?? ""
-        let loggedInFromResponse = isAuthenticatedResponse(url: httpResponse.url, html: html)
-        let loggedInFromSessionCheck = await verifyAuthenticatedSession(retryCount: 2)
-        try scope.check()
-
-        if loggedInFromResponse && loggedInFromSessionCheck {
-            await MainActor.run {
-                self.currentPortal = .undergraduate
-                self.persistAuthenticatedIdentity(eduID: trimmedAccount)
-                self.isLoggedIn = true
-            }
-            return true
-        }
-
-        if loggedInFromSessionCheck {
-            await MainActor.run {
-                self.currentPortal = .undergraduate
-                self.persistAuthenticatedIdentity(eduID: trimmedAccount)
-                self.isLoggedIn = true
-            }
-            return true
-        }
-
+        let html = try decodedHTML(from: data)
         if let message = extractLoginMessage(from: html) {
             throw SchoolNetworkError.loginFailed(message)
         }
+        let loggedInFromSessionCheck = try await verifyUndergraduateLoginSession()
+        try scope.check()
+        guard authenticationOperationID == operationID else { throw CancellationError() }
+
+        if loggedInFromSessionCheck {
+            currentPortal = .undergraduate
+            persistAuthenticatedIdentity(eduID: trimmedAccount)
+            isLoggedIn = true
+            return true
+        }
 
         if isLoginPage(html) {
-            throw SchoolNetworkError.loginFailed(
+            throw SchoolNetworkError.loginUnavailable(
                 "登录未成功，服务端仍返回登录页。" +
                     pageDebugSummary(
                         html: html,
@@ -227,12 +234,13 @@ extension SchoolNetworkManager {
             )
         }
 
-        return false
+        throw SchoolNetworkError.loginUnavailable("登录请求已发送，但未能确认登录成功。请刷新验证码后重试。")
     }
 
     private func performGraduateLogin(account: String, password: String, captcha: String,
                                       publicKey: String) async throws -> Bool {
         let scope = CampusOperationScope()
+        let operationID = authenticationOperationID
         let trimmedAccount = account.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let loginUrl = graduateURL(path: "/home/stulogin_do"),
               let refererURL = graduateURL(path: "/home/stulogin"),
@@ -279,43 +287,55 @@ extension SchoolNetworkManager {
 
         let displayName = (try? await fetchGraduateDisplayName(from: nameURL)) ?? trimmedAccount
         try scope.check()
-        await MainActor.run {
-            self.currentPortal = .graduate
-            self.persistAuthenticatedIdentity(eduID: trimmedAccount, displayName: displayName)
-            self.isLoggedIn = true
-        }
+        guard authenticationOperationID == operationID else { throw CancellationError() }
+        currentPortal = .graduate
+        persistAuthenticatedIdentity(eduID: trimmedAccount, displayName: displayName)
+        isLoggedIn = true
         return true
     }
 
-    func encodeKey(key: String, account: String, password: String) -> String {
+    private func verifyUndergraduateLoginSession() async throws -> Bool {
+        guard let url = URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp") else { throw URLError(.badURL) }
+        for attempt in 0 ... 2 {
+            let (page, _) = try await html(from: url)
+            if isAuthenticatedResponse(url: nil, html: page) { return true }
+            if attempt < 2 { try await Task.sleep(for: .milliseconds(300)) }
+        }
+        return false
+    }
+
+    private func undergraduateLoginKey(from data: Data, response: URLResponse) throws -> String {
+        guard let response = response as? HTTPURLResponse, (200 ... 299).contains(response.statusCode) else {
+            throw SchoolNetworkError.loginUnavailable("学校登录服务暂时不可用，请刷新验证码后重试。")
+        }
+        let key = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        _ = try undergraduateKeyParts(key)
+        return key
+    }
+
+    private func undergraduateKeyParts(_ key: String) throws -> (secret: [UInt16], shifts: [UInt16]) {
         let parts = key.components(separatedBy: "#")
-        guard parts.count == 2 else { return "" }
+        guard parts.count == 2, !parts[0].isEmpty, !parts[0].contains("<"), !parts[0].contains(">"),
+              !parts[1].isEmpty, parts[1].utf16.allSatisfy({ (48 ... 57).contains($0) }) else {
+            throw SchoolNetworkError.loginUnavailable("学校登录密钥无效，请刷新验证码后重试。")
+        }
+        return (Array(parts[0].utf16), Array(parts[1].utf16))
+    }
 
-        var secretCode = parts[0]
-        let secretKey = Array(parts[1])
-        let code = account + "%%%" + password
-        let codeChars = Array(code)
-
-        var encoded = ""
-
-        for i in 0 ..< codeChars.count {
-            if i < 20 && i < secretKey.count {
-                encoded.append(codeChars[i])
-                let shift = Int(String(secretKey[i])) ?? 0
-
-                let prefixCount = min(shift, secretCode.count)
-                let prefixIndex = secretCode.index(secretCode.startIndex, offsetBy: prefixCount)
-                encoded.append(String(secretCode[..<prefixIndex]))
-
-                secretCode = String(secretCode[prefixIndex...])
-            } else {
-                let remaining = String(codeChars[i...])
-                encoded.append(remaining)
-                break
+    func encodeKey(key: String, account: String, password: String) throws -> String {
+        let (secret, shifts) = try undergraduateKeyParts(key)
+        let code = Array((account + "%%%" + password).utf16)
+        var encoded: [UInt16] = []
+        var secretOffset = 0
+        for index in code.indices {
+            encoded.append(code[index])
+            if index < 20, index < shifts.count {
+                let end = min(secretOffset + Int(shifts[index] - 48), secret.count)
+                encoded.append(contentsOf: secret[secretOffset ..< end])
+                secretOffset = end
             }
         }
-
-        return encoded
+        return String(decoding: encoded, as: UTF16.self)
     }
 
     func formURLEncodedBody(queryItems: [URLQueryItem]) -> Data {

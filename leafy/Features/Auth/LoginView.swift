@@ -28,6 +28,8 @@ struct LoginView: View {
     @State private var captchaRequestID = UUID()
     @State private var lastAutomaticCaptchaRefreshAt: Date?
 
+    @State private var captchaTask: Task<Void, Never>?
+    @State private var authenticationTask: Task<Void, Never>?
     @State private var authenticationRequestID = UUID()
     @State private var isLoggingIn = false
     @State private var isEnteringDemo = false
@@ -75,11 +77,12 @@ struct LoginView: View {
                 || password.isEmpty
                 || (customAuthMode == .signUp && customSignUpCode.isEmpty)
         }
-        return isLoggingIn || username.isEmpty || password.isEmpty || captchaCode.isEmpty
+        return isLoggingIn || isCaptchaLoading || captchaImage == nil || sessionKey.isEmpty
+            || username.isEmpty || password.isEmpty || captchaCode.isEmpty
     }
 
     private var shouldAutomaticallyRefreshCaptcha: Bool {
-        captchaImage == nil || captchaLoadMessage != nil
+        !isLoggingIn && !isCaptchaLoading && (captchaImage == nil || captchaLoadMessage != nil)
     }
 
     var body: some View {
@@ -146,11 +149,10 @@ struct LoginView: View {
             }
             .onChange(of: selectedPortal) { _, newValue in
                 guard !isCustomCampusSelected, !isGuestCampusSelected else { return }
-                authenticationRequestID = UUID()
-                isLoggingIn = false
+                cancelAuthenticationTasks()
                 schoolNetworkManager.currentPortal = newValue
                 restoreSchoolCredential(for: newValue)
-                Task { await fetchCaptcha() }
+                startCaptchaLoad()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 guard !isCustomCampusSelected, !isGuestCampusSelected else { return }
@@ -163,15 +165,14 @@ struct LoginView: View {
                 startAutomaticCaptchaRefresh()
             }
             .onDisappear {
-                authenticationRequestID = UUID()
-                captchaRequestID = UUID()
+                cancelAuthenticationTasks()
                 customSignUpCodeCooldownTask?.cancel()
                 customSignUpCodeCooldownTask = nil
             }
             .alert(L10n.text("提示", language: leafyLanguage), isPresented: $showAlert) {
                 Button(L10n.text("确定", language: leafyLanguage)) {
                     if !isCustomCampusSelected, !isGuestCampusSelected {
-                        Task { await fetchCaptcha() }
+                        startCaptchaLoad()
                     }
                 }
             } message: {
@@ -544,7 +545,7 @@ struct LoginView: View {
     @ViewBuilder
     private var captchaButton: some View {
         Button {
-            Task { await fetchCaptcha() }
+            startCaptchaLoad()
         } label: {
             ZStack {
                 if let image = captchaImage {
@@ -568,7 +569,7 @@ struct LoginView: View {
             .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
         }
         .buttonStyle(.plain)
-        .disabled(isCaptchaLoading)
+        .disabled(isCaptchaLoading || isLoggingIn)
         .leafyGlassSurface(
             in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous),
             isInteractive: true
@@ -580,7 +581,7 @@ struct LoginView: View {
     private var loginButton: some View {
         if #available(iOS 26.0, *) {
             Button {
-                Task { await performLogin() }
+                startLogin()
             } label: {
                 HStack(spacing: 10) {
                     if isLoggingIn {
@@ -597,7 +598,7 @@ struct LoginView: View {
             .tint(AppTheme.accent)
         } else {
             Button {
-                Task { await performLogin() }
+                startLogin()
             } label: {
                 HStack(spacing: 10) {
                     if isLoggingIn {
@@ -639,6 +640,7 @@ struct LoginView: View {
 
     @MainActor
     private func handleSelectedCampusChange() {
+        cancelAuthenticationTasks()
         authenticationRequestID = UUID()
         captchaRequestID = UUID()
         schoolNetworkManager.cancelInFlightRequests()
@@ -663,7 +665,7 @@ struct LoginView: View {
             customSignUpCodeEmail = nil
             customSignUpCodePassword = nil
             restoreSchoolCredential(for: selectedPortal)
-            Task { await fetchCaptcha() }
+            startCaptchaLoad()
         }
     }
 
@@ -722,7 +724,7 @@ struct LoginView: View {
         }
 
         lastAutomaticCaptchaRefreshAt = now
-        Task { await fetchCaptcha(automatic: true) }
+        startCaptchaLoad(automatic: true)
     }
 
     @MainActor
@@ -732,9 +734,7 @@ struct LoginView: View {
 
     @MainActor
     private func fetchCaptcha(automatic: Bool) async {
-        if automatic, isCaptchaLoading {
-            return
-        }
+        guard !isLoggingIn, !isCaptchaLoading else { return }
         if automatic, !shouldAutomaticallyRefreshCaptcha {
             return
         }
@@ -788,8 +788,35 @@ struct LoginView: View {
         return nsError.domain == NSURLErrorDomain && nsError.code == URLError.cancelled.rawValue
     }
 
+    @MainActor
+    private func startCaptchaLoad(automatic: Bool = false) {
+        guard !isLoggingIn, !isCaptchaLoading else { return }
+        captchaTask?.cancel()
+        captchaTask = Task { await fetchCaptcha(automatic: automatic) }
+    }
+
+    @MainActor
+    private func startLogin() {
+        guard !isLoginDisabled else { return }
+        authenticationTask?.cancel()
+        authenticationTask = Task { await performLogin() }
+    }
+
+    @MainActor
+    private func cancelAuthenticationTasks() {
+        captchaTask?.cancel()
+        authenticationTask?.cancel()
+        captchaTask = nil
+        authenticationTask = nil
+        captchaRequestID = UUID()
+        authenticationRequestID = UUID()
+        isCaptchaLoading = false
+        isLoggingIn = false
+        schoolNetworkManager.cancelAuthenticationOperation()
+    }
+
     private func performLogin() async {
-        guard !isLoggingIn else { return }
+        guard !isLoginDisabled else { return }
 
         let requestID = UUID()
         authenticationRequestID = requestID

@@ -17,6 +17,8 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import kotlinx.serialization.json.*
+import java.net.URLDecoder
 
 class SchoolAuthFlowTest {
 
@@ -43,6 +45,74 @@ class SchoolAuthFlowTest {
     @After
     fun tearDown() {
         server.shutdown()
+    }
+
+    @Test
+    fun announcementDoesNotBlockVerifiedCandidateSession() = runBlocking {
+        val delegate = authenticDispatcher()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.path == "/Logon.do?method=logon") {
+                    MockResponse().addHeader("Set-Cookie", "JSESSIONID=xyz; Path=/").setBody(loginMessageFixture("announcement"))
+                } else delegate.dispatch(request)
+        }
+        client.loginUndergraduate(client.prepareUndergraduateChallenge(), "2012", " Ab9+%&#=Z7 ", "1234")
+        assertTrue(session.isLoggedIn)
+        server.takeRequest(5, TimeUnit.SECONDS)
+        server.takeRequest(5, TimeUnit.SECONDS)
+        val body = checkNotNull(server.takeRequest(5, TimeUnit.SECONDS)).body.readUtf8()
+        val encoded = URLDecoder.decode(body.substringAfter("encoded=").substringBefore("&"), "UTF-8")
+        assertEquals(com.myleafy.android.core.network.SchoolLoginEncoder.encodeKey("SECRETCODE#12345", "2012", " Ab9+%&#=Z7 "), encoded)
+    }
+
+    @Test
+    fun laterCaptchaErrorIsNotReplacedByAnnouncement() = runBlocking {
+        val delegate = authenticDispatcher()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.path == "/Logon.do?method=logon") {
+                    MockResponse().setBody(loginMessageFixture("captcha_after_validation"))
+                } else delegate.dispatch(request)
+        }
+        val error = assertThrows(SchoolNetworkError.LoginFailed::class.java) {
+            runBlocking { client.loginUndergraduate(client.prepareUndergraduateChallenge(), "2012", "pw", "0000") }
+        }
+        assertEquals("验证码错误", error.message)
+        assertEquals(false, session.isLoggedIn)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test
+    fun invalidKeyStopsBeforeCaptchaAndLogin() = runBlocking {
+        server.enqueue(MockResponse().setBody("no"))
+        assertThrows(SchoolNetworkError.Unexpected::class.java) {
+            runBlocking { client.prepareUndergraduateChallenge() }
+        }
+        assertEquals(1, server.requestCount)
+        assertEquals(false, session.isLoggedIn)
+    }
+
+    @Test
+    fun unknownPageAtStudentUrlCannotConfirmLogin() = runBlocking {
+        val delegate = authenticDispatcher()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.path == "/jsxsd/framework/xsMain.jsp") MockResponse().setBody("<html>学校维护中</html>")
+                else delegate.dispatch(request)
+        }
+        assertThrows(SchoolNetworkError.LoginFailed::class.java) {
+            runBlocking { client.loginUndergraduate(client.prepareUndergraduateChallenge(), "2012", "pw", "1234") }
+        }
+        assertEquals(false, session.isLoggedIn)
+        assertEquals(emptyMap<String, String>(), client.cookies)
+    }
+
+    private fun loginMessageFixture(name: String): String {
+        val raw = checkNotNull(javaClass.classLoader?.getResourceAsStream("jwxt/fixtures/login_messages.json"))
+            .bufferedReader().use { it.readText() }
+        return Json.parseToJsonElement(raw).jsonArray.first {
+            it.jsonObject.getValue("name").jsonPrimitive.content == name
+        }.jsonObject.getValue("html").jsonPrimitive.content
     }
 
     @Test

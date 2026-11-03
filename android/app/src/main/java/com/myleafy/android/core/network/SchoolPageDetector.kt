@@ -21,7 +21,7 @@ object SchoolPageDetector {
         loginPageMarkers.any { html.contains(it) }
 
     fun isAuthenticatedResponse(url: String, html: String): Boolean {
-        if (isLoginPage(html)) return false
+        if (html.isBlank() || isLoginPage(html)) return false
 
         val urlMarkers = listOf(
             "xsMain.jsp",
@@ -48,6 +48,7 @@ object SchoolPageDetector {
     private val ignoredLoginMessages = setOf(
         "请输入完整的登陆信息！",
         "系统检查到您两次登录的账号不一致，是否确定用新账号登录？",
+        "本平台为互联网非涉密平台，严禁处理、传输国家秘密、工作秘密及敏感信息。",
     )
 
     private val loginMessagePatterns = listOf(
@@ -59,9 +60,12 @@ object SchoolPageDetector {
     /** 从登录失败页提取提示消息；无有效消息返回 null。 */
     fun extractLoginMessage(html: String): String? {
         for (pattern in loginMessagePatterns) {
-            val message = pattern.find(html)?.groupValues?.getOrNull(1)?.trim()
-            if (!message.isNullOrEmpty() && message !in ignoredLoginMessages) {
-                return message
+            for (match in pattern.findAll(html)) {
+                val message = match.groupValues.getOrNull(1)?.trim() ?: continue
+                val compactMessage = message.filterNot { it.isWhitespace() }
+                if (message.isNotEmpty() && ignoredLoginMessages.none { it.filterNot { char -> char.isWhitespace() } == compactMessage }) {
+                    return message
+                }
             }
         }
         return null

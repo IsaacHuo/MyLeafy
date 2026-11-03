@@ -5,8 +5,26 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.serialization.json.*
 
 class SchoolPageDetectorTest {
+
+    @Test
+    fun sharedLoginMessageFixtures() {
+        val raw = checkNotNull(javaClass.classLoader?.getResourceAsStream("jwxt/fixtures/login_messages.json"))
+            .bufferedReader().use { it.readText() }
+        for (item in Json.parseToJsonElement(raw).jsonArray) {
+            val fields = item.jsonObject
+            assertEquals(fields.getValue("name").jsonPrimitive.content,
+                fields.getValue("expected").jsonPrimitive.contentOrNull,
+                SchoolPageDetector.extractLoginMessage(fields.getValue("html").jsonPrimitive.content))
+        }
+    }
+
+    @Test
+    fun emptyPageIsNeverAuthenticatedEvenAtStudentUrl() {
+        assertFalse(SchoolPageDetector.isAuthenticatedResponse("http://newjwxt.bjfu.edu.cn/jsxsd/framework/xsMain.jsp", ""))
+    }
 
     @Test
     fun isLoginPageDetectsMarkers() {

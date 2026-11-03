@@ -34,12 +34,13 @@ extension SchoolNetworkManager {
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         guard let url = request.url, isSchoolURL(url) else { throw URLError(.unsupportedURL) }
-        guard !AppRuntimeEnvironment.isRunningUnitTests else { throw URLError(.unsupportedURL) }
         let scope = CampusOperationScope()
+        let generation = sessionGeneration
         do {
             try scope.check()
-            let response = try await session.data(for: request)
+            let response = try await loadSchoolRequest(request)
             try scope.check()
+            guard generation == sessionGeneration else { throw CancellationError() }
             return response
         } catch {
             throw mapSchoolNetworkError(error)
@@ -282,6 +283,7 @@ extension SchoolNetworkManager {
     }
 
     func cancelInFlightRequests() {
+        authenticationOperationID = nil
         sessionGeneration &+= 1
         session.invalidateAndCancel()
         session = Self.makeSession()
@@ -409,7 +411,7 @@ extension SchoolNetworkManager {
     }
 
     func isAuthenticatedResponse(url: URL?, html: String) -> Bool {
-        if isLoginPage(html) {
+        if html.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoginPage(html) {
             return false
         }
 
@@ -441,7 +443,8 @@ extension SchoolNetworkManager {
     func extractLoginMessage(from html: String) -> String? {
         let ignoredMessages: Set<String> = [
             "请输入完整的登陆信息！",
-            "系统检查到您两次登录的账号不一致，是否确定用新账号登录？"
+            "系统检查到您两次登录的账号不一致，是否确定用新账号登录？",
+            "本平台为互联网非涉密平台，严禁处理、传输国家秘密、工作秘密及敏感信息。"
         ]
         let patterns = [
             #"alert\(['"]([^'"]+)['"]\)"#,
@@ -455,15 +458,15 @@ extension SchoolNetworkManager {
             }
 
             let range = NSRange(html.startIndex..., in: html)
-            guard let match = regex.firstMatch(in: html, options: [], range: range),
-                  match.numberOfRanges > 1,
-                  let captureRange = Range(match.range(at: 1), in: html) else {
-                continue
-            }
-
-            let message = String(html[captureRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !message.isEmpty && !ignoredMessages.contains(message) {
-                return message
+            for match in regex.matches(in: html, options: [], range: range) {
+                guard match.numberOfRanges > 1,
+                      let captureRange = Range(match.range(at: 1), in: html) else { continue }
+                let message = String(html[captureRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let compactMessage = message.filter { !$0.isWhitespace }
+                if !message.isEmpty && !ignoredMessages
+                    .contains(where: { $0.filter { !$0.isWhitespace } == compactMessage }) {
+                    return message
+                }
             }
         }
 
