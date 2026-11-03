@@ -589,7 +589,7 @@
 					"@executable_path/Frameworks",
 				);
 				LEAFY_CLOUDKIT_ENVIRONMENT = Development;
-				MARKETING_VERSION = 3.2.6;
+				MARKETING_VERSION = 3.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.isaachuo.leafy;
 				PRODUCT_NAME = Leafy;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -631,7 +631,7 @@
 					"@executable_path/Frameworks",
 				);
 				LEAFY_CLOUDKIT_ENVIRONMENT = Production;
-				MARKETING_VERSION = 3.2.6;
+				MARKETING_VERSION = 3.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.isaachuo.leafy;
 				PRODUCT_NAME = Leafy;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -662,7 +662,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.6;
+				MARKETING_VERSION = 3.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.leafy-widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -693,7 +693,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.6;
+				MARKETING_VERSION = 3.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.leafy-widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -774,7 +774,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.6;
+				MARKETING_VERSION = 3.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.share-extension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -805,7 +805,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.6;
+				MARKETING_VERSION = 3.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.share-extension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
