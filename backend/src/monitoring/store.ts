@@ -11,6 +11,12 @@ export class MonitorStore {
     this.db = new Database(path);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 3000");
+    // Two environments share the 512 MiB log budget with Caddy's 128 MiB each.
+    const pageSize = Number(this.db.pragma("page_size", { simple: true }));
+    this.db.pragma(
+      `max_page_count = ${Math.floor((100 * 1024 * 1024) / pageSize)}`,
+    );
+    this.db.pragma("journal_size_limit = 8388608");
     this.db.pragma("auto_vacuum = INCREMENTAL");
     this.db
       .exec(`CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY, timestamp INTEGER NOT NULL, source TEXT NOT NULL, level TEXT NOT NULL, event TEXT NOT NULL, host TEXT, method TEXT, route TEXT, status INTEGER, duration REAL, bytes INTEGER, ip TEXT, requestId TEXT, code TEXT);
@@ -299,7 +305,7 @@ export class MonitorStore {
       retentionDays: 7,
     };
   }
-  retain(now = Date.now(), maxBytes = 350 * 1024 * 1024) {
+  retain(now = Date.now(), maxBytes = 100 * 1024 * 1024) {
     this.db.transaction(() => {
       this.db.prepare("DELETE FROM logs WHERE timestamp<?").run(now - 7 * day);
       for (const [table, column] of [

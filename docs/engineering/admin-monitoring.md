@@ -22,7 +22,7 @@ Prometheus 每 30 秒抓取 host、Caddy、API 进程与 monitor 指标。node_e
 
 - 回环端口：Prometheus 9090、node_exporter 9100、API 指标 3120/3121、monitor 3140/3141；Caddy 管理仍为 2019。这些端口不得对公网开放。
 - 网关日志在 `/var/lib/caddy/myleafy-access/{environment}`，可沿用 Caddy 现有写目录权限，配置 reload 无需新增公开端口。
-- 指标保留 14 天，总磁盘目标 1 GiB；块保留 768 MB 给 WAL/head 留余量。访问日志每环境约 128 MiB，SQLite 活跃页按 350 MiB 清理，给 WAL 和整理留余量，日志总目标 512 MiB、7 天。告警、日报和发送回执保留 30 天。
+- 指标保留 14 天，总磁盘目标 1 GiB；块保留 768 MB 给 WAL/head 留余量。访问日志每环境约 128 MiB，每环境 SQLite 硬限制 100 MiB，活跃页达到其 85% 时清理，给 WAL 和整理留余量，两环境日志合计目标 512 MiB、7 天。告警、日报和发送回执保留 30 天。
 - 缺失、积压、过期或容量清理必须可见，不能显示为完整或健康。接口统计排除自身探测、健康检查和后台轮询。请求和字节不是活跃用户；长连接在结束后计入。
 
 ## 告警与日报

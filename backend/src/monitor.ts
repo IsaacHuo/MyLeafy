@@ -108,6 +108,8 @@ if (process.argv.includes("--test-notifications")) {
     const previousError = store.get("collectionError");
     store.set("collectionError", null);
     try {
+      // Clean before ingestion, including after a previous full-database failure.
+      if (ticks++ % 20 === 0) store.retain(now);
       for (const [name, read] of [
         [
           "access",
@@ -333,7 +335,6 @@ if (process.argv.includes("--test-notifications")) {
       // Persistent timer enqueues the report; this also retries the most recent missed period.
       if (email.enabled) queueDailyReport(store, environment, now);
       await deliverMail(store, email, now);
-      if (++ticks % 20 === 0) store.retain(now);
     } catch {
       store.set("collectionError", "monitor_cycle_failed");
     } finally {

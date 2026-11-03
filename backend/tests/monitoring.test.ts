@@ -207,6 +207,36 @@ describe("monitoring privacy, range and sources", () => {
     store.set("lastCollection", now);
     expect(store.coverage(now).stale).toBe(false);
   });
+  it("bounds each log database and removes oldest records when capacity is reached", () => {
+    const { store } = database();
+    const bytes =
+      Number(store.db.pragma("page_size", { simple: true })) *
+      Number(store.db.pragma("max_page_count", { simple: true }));
+    expect(bytes).toBeLessThanOrEqual(100 * 1024 * 1024);
+    store.ingest(
+      Array.from({ length: 4000 }, (_, index) => ({
+        timestamp: now - 4000 + index,
+        source: "access",
+        level: "info" as const,
+        event: "request",
+        route: "/v1/community/posts/:id",
+        requestId: "test-" + index,
+        bytes: 100,
+        duration: 0.1,
+        status: 200,
+      })),
+    );
+    store.retain(now, 512 * 1024);
+    const rows = store.db
+      .prepare(
+        "SELECT count(*) n,min(timestamp) oldest,max(timestamp) newest FROM logs",
+      )
+      .get() as any;
+    expect(rows.n).toBeLessThan(4000);
+    expect(rows.oldest).toBeGreaterThan(now - 4000);
+    expect(rows.newest).toBe(now - 1);
+    expect(store.coverage(now).capacityLimited).toBe(true);
+  });
   it("only permits predefined metric queries and handles empty/NaN as missing", async () => {
     const request = vi.fn(async () =>
       Response.json({
