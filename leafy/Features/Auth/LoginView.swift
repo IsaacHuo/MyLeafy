@@ -772,9 +772,13 @@ struct LoginView: View {
                 return
             }
 
-            captchaLoadMessage = portal == .graduate
-                ? L10n.text("当前网络无法连接研究生系统验证码。网络恢复后会自动重试，也可点验证码区域重试。", language: leafyLanguage)
-                : L10n.text("当前网络无法连接教务验证码。网络恢复后会自动重试，也可点验证码区域重试。", language: leafyLanguage)
+            if case SchoolNetworkError.loginUnavailable(let message) = error {
+                captchaLoadMessage = L10n.text(message, language: leafyLanguage)
+            } else {
+                captchaLoadMessage = portal == .graduate
+                    ? L10n.text("当前网络无法连接研究生系统验证码。网络恢复后会自动重试，也可点验证码区域重试。", language: leafyLanguage)
+                    : L10n.text("当前网络无法连接教务验证码。网络恢复后会自动重试，也可点验证码区域重试。", language: leafyLanguage)
+            }
             isCaptchaLoading = false
         }
     }
