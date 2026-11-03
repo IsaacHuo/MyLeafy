@@ -3,6 +3,24 @@
   metrics {
     per_host
   }
+  # Runtime HTTP errors must not write request URLs/headers or free messages to journald.
+  log default {
+    exclude http.log.error http.handlers.reverse_proxy
+  }
+  log request_errors {
+    include http.log.error http.handlers.reverse_proxy
+    output stderr
+    format filter {
+      wrap json {
+        message_key ""
+      }
+      fields {
+        request delete
+        resp_headers delete
+        error delete
+      }
+    }
+  }
 }
 (monitoring) {
   import /etc/myleafy/Caddyfile.monitoring-routes
@@ -27,14 +45,15 @@
       roll_uncompressed
     }
     format filter {
-      wrap json
+      wrap json {
+        message_key ""
+      }
       fields {
         request>headers delete
         request>uri delete
         request>remote_port delete
         request>tls delete
         resp_headers delete
-        msg delete
         err_trace delete
         error delete
         request>remote_ip ip_mask {

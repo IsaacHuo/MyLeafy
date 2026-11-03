@@ -60,6 +60,22 @@ cd /opt/myleafy/staging/current/backend
 
 部署报告在 `/opt/myleafy/<environment>/deployment.json`，包含源码、上一产物、校验与健康结果，不包含 Secret。恢复数据库时先停写，把故障状态另存，再恢复到新目录并逐表/逐对象校验；服务读写开关独立决定。
 
+## Admin、指标、日志和邮件
+
+配置与恢复入口见 [Admin 监控](../engineering/admin-monitoring.md) 和 [Configuration 监控手册](https://github.com/IsaacHuo/Configuration/blob/main/myleafy-ecs/MONITORING.md)。先部署已验收的业务产物，再启动对应环境 monitor；production 继续消费同一 staging 归档并由所有者批准。
+
+首次安装由操作者运行 `backend/deploy/install-monitoring.sh`，通过受保护进程环境提供固定收件人。脚本只安装官方校验过的 Prometheus / node_exporter，生成 per-environment MONITOR_TOKEN 和最小 monitor env；原 API 的认证、媒体和发行配置保持。`/etc/myleafy/{environment}.monitor.env` 为 root 0600，不提交真实值。正常 staging 邮件保持关闭。
+
+Caddy 生产配置启用前先 validate，再 reload；新服务器必须同时修改 probe map 中旧公网/私网地址。访问记录在落盘前删掉 URI、查询和头，IP 掩码，路由只记固定模板。公开入口不暴露 9090/9100/3120/3121/3140/3141。Caddy 管理仍为回环 2019。保留现有 ACME 网络 drop-in。
+
+监控独立于业务 API 和数据库，可单独停用或恢复。指标保留 14 天、整体磁盘目标 1 GiB；两环境访问日志与索引合计目标 512 MiB，每库硬限 100 MiB 并预先清理，原始文件按 16 MiB / 七份旧文件 / 七天轮转。日报、告警、发送账本三十天。容量、缺失和采集中断在后台可见；请求数不等于活跃用户。
+
+生产邮件验收使用受控 CLI `dist/monitor.mjs --test-notifications <accepted-commit>`，通过 systemd 载入受保护 env 并以 myleafy-monitor 身份运行，避免 root 创建 SQLite 文件。该命令只发送三封明确标记的测试邮件，并以源码去重，不制造真实生产故障。实际到达收件箱由所有者确认；服务商接受不是最终送达。
+
+正式启用时只将 production.monitor.env 的 MONITOR_EMAIL_ENABLED 改为 true，重启 monitor@production 并确认 report timer。日报每天北京时间 21:00 生成，重启最多补最近一期，首日明确标记统计不完整。监控每日最多十封，为日报保留一封，启用前核对 Resend 的实际额度，不升级套餐。验证码仍由原 API 发送。
+
+备份/部署通过 root 写入有限期维护标记和备份结果；monitor 只读这些回执，不接触业务数据库或解密密钥。停用监控时保留历史目录，不恢复旧业务库。正常回退仍需要核对代码与现有数据库的兼容性。
+
 ## 下载备份
 
 先通过 Workbench 只列出 `/var/backups/myleafy/<environment>` 的已完成 `.tar`，下载所选 tar 和同名 `.sha256`，在 Mac 校验后保存。归档只含加密内容，密钥单独保存。
