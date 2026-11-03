@@ -123,6 +123,7 @@ final class SchoolNetworkManager: ObservableObject {
     var session: URLSession = makeSession()
     var authenticationOperationID: UUID?
     private let requestLoader: (@MainActor (URLRequest) async throws -> (Data, URLResponse))?
+    let credentialSaver: @MainActor (String, String, CampusID, SchoolPortal) -> Bool
 
     func loadSchoolRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
         if let requestLoader { return try await requestLoader(request) }
@@ -145,8 +146,13 @@ final class SchoolNetworkManager: ObservableObject {
         return URLSession(configuration: config)
     }
 
-    init(requestLoader: (@MainActor (URLRequest) async throws -> (Data, URLResponse))? = nil) {
+    init(
+        requestLoader: (@MainActor (URLRequest) async throws -> (Data, URLResponse))? = nil,
+        credentialSaver: @escaping @MainActor (String, String, CampusID, SchoolPortal)
+            -> Bool = SchoolLoginCredentialStore.save
+    ) {
         self.requestLoader = requestLoader
+        self.credentialSaver = credentialSaver
         let currentIdentity = CampusIdentityStore.currentIdentity()
         let portal = SchoolPortal(rawValue: UserDefaults.standard
             .string(forKey: CampusScopedDefaults.key("schoolPortal")) ?? "") ?? .undergraduate

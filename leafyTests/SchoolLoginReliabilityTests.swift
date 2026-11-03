@@ -12,7 +12,6 @@ final class SchoolLoginReliabilityTests: XCTestCase {
 
     override func tearDown() {
         ActiveCampusContext.networkManager.clearSession()
-        try? SchoolLoginCredentialStore.deleteAll()
         super.tearDown()
     }
 
@@ -105,6 +104,16 @@ final class SchoolLoginReliabilityTests: XCTestCase {
         )
     }
 
+    func testCredentialCacheFailureDoesNotUndoVerifiedLogin() async throws {
+        let stub = SchoolLoginStub()
+        stub.credentialSaveSucceeds = false
+        let manager = makeManager(stub)
+        let succeeded = try await login(manager)
+        XCTAssertTrue(succeeded)
+        XCTAssertTrue(manager.isLoggedIn)
+        XCTAssertEqual(stub.savedCredentials.count, 1)
+    }
+
     func testActualErrorsRemainFailuresEvenIfVerificationWouldSucceed() async throws {
         for name in ["credentials", "captcha_after_validation", "locked"] {
             let stub = SchoolLoginStub()
@@ -114,7 +123,7 @@ final class SchoolLoginReliabilityTests: XCTestCase {
             catch { XCTAssertTrue(error is SchoolNetworkError) }
             XCTAssertFalse(manager.isLoggedIn)
             XCTAssertFalse(stub.requests.contains { $0.url?.path.contains("xsMain.jsp") == true })
-            XCTAssertNil(SchoolLoginCredentialStore.load(campusID: .bjfu, portal: .undergraduate))
+            XCTAssertTrue(stub.savedCredentials.isEmpty)
         }
     }
 
@@ -126,6 +135,7 @@ final class SchoolLoginReliabilityTests: XCTestCase {
         do { _ = try await login(manager); XCTFail("Unknown page is not authentication evidence") } catch {}
         XCTAssertFalse(manager.isLoggedIn)
         XCTAssertNil(manager.authenticatedEduID)
+        XCTAssertTrue(stub.savedCredentials.isEmpty)
     }
 
     func testEmptyLoginResponseCanSucceedOnlyWithVerifiedSession() async throws {
@@ -219,7 +229,15 @@ final class SchoolLoginReliabilityTests: XCTestCase {
     }
 
     private func makeManager(_ stub: SchoolLoginStub) -> SchoolNetworkManager {
-        let manager = SchoolNetworkManager(requestLoader: { try await stub.load($0) })
+        let manager = SchoolNetworkManager(
+            requestLoader: { try await stub.load($0) },
+            credentialSaver: { account, password, campusID, portal in
+                stub.savedCredentials.append(SchoolLoginCredential(campusID: campusID, portal: portal,
+                                                                   account: account, password: password,
+                                                                   savedAt: Date()))
+                return stub.credentialSaveSucceeds
+            }
+        )
         manager.currentPortal = .undergraduate
         manager.isLoggedIn = false
         manager.authenticatedEduID = nil
@@ -259,6 +277,8 @@ private final class SchoolLoginStub {
     var verificationHTML = "<html>学生课表 退出系统</html>"
     var verificationError: Error?
     var holdsKey = false
+    var credentialSaveSucceeds = true
+    var savedCredentials: [SchoolLoginCredential] = []
     var requests: [URLRequest] = []
     private var held: [CheckedContinuation<(Data, URLResponse), Error>?] = []
 

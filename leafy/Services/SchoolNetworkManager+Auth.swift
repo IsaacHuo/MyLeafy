@@ -163,12 +163,7 @@ extension SchoolNetworkManager {
         }
 
         if didLogin {
-            _ = SchoolLoginCredentialStore.save(
-                account: account,
-                password: password,
-                campusID: campusDescriptor.id,
-                portal: portal
-            )
+            _ = credentialSaver(account, password, campusDescriptor.id, portal)
         }
         return didLogin
     }

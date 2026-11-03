@@ -23,7 +23,7 @@ iOS 还存在无效密钥编码为空仍提交、验证码刷新清理登录中�
 
 `login_encoding.json` 包含 1,224 组普通字符组合和 11 组空格/组合字符/emoji/控制字符及代理单元边界用例。预期由学校公开登录页 onSubmint 的 substring 交错循环在 Node 中离线生成，再经 URLSearchParams 的浏览器表单 USVString 转换；所有账号、密码和密钥均为合成数据。Swift 按 UTF-16 数组比较，避免 String 的规范等价比较掩盖差异。
 
-iOS 仅显式注入的隔离 request loader 能在单测执行学校请求；默认传输仍禁止单测真实联网。Android 沿用 MockWebServer。回归覆盖请求体、Cookie、成功/真实拒绝/未知响应、异常密钥不发登录请求、取消及替代请求互斥。
+iOS 显式注入隔离 request loader 和凭据保存器，逐项检查保存参数及仅在会话验证后保存；默认传输仍禁止单测真实联网，正式构造默认使用原 Keychain 保存实现。凭据缓存失败不撤销已确认的登录，系统 Keychain 读写单独在设备验收。Android 沿用 MockWebServer。回归覆盖请求体、Cookie、成功/真实拒绝/未知响应、异常密钥不发登录请求、取消及替代请求互斥。
 
 ## 验证证据
 
@@ -32,3 +32,9 @@ iOS 仅显式注入的隔离 request loader 能在单测执行学校请求；默
 - iOS：初版在任务专用 DerivedData 中串行执行 iOS 17 最低目标 build-for-testing，通过并生成新测试 bundle。随后既有模拟器报告 Data Migration Failed，未执行用例；新建隔离模拟器仍停在 ContainerMigrator，且主机出现磁盘不足。补充恢复表单重复点击保护后的增量构建在资产编译阶段因磁盘不足中断，不能扩大此前构建结论为最终源码通过。
 - 已保留构建/启动日志，并只清理本任务 DerivedData、新建测试设备和任务 worktree 生成的 Android build 目录；未清理其他工作区、既有模拟器或用户数据。最终 iOS 源码将通过远程 Full validation 验证，结果按精确提交补充。
 - 基础 CI 按最终精确提交另行核对；未进行真实学校登录、真机交互或发布 App。
+
+### 首次远程全量结果与修正
+
+`3fbd33f` 的基础 CI [41574941121](https://github.com/IsaacHuo/MyLeafy/actions/runs/41574941121) 通过；iOS Full validation [41574942887](https://github.com/IsaacHuo/MyLeafy/actions/runs/41574942887) 构建通过，795 项中 793 通过、1 跳过、1 失败。唯一失败为新增用例直接从 CI Simulator 系统 Keychain 读取保存密码得到 nil；该用例的请求编码、Cookie、成功会话和身份断言均通过。测试结果未提供底层 Keychain 状态码，不能据此断言具体系统权限原因。
+
+将凭据保存与网络一样作为显式注入的测试依赖，检查密码/账号/校园/门户原样传递、真实拒绝或会话验证失败不保存，以及缓存保存失败不回滚有效会话。正式默认仍调用既有 `SchoolLoginCredentialStore.save`，没有放宽登录成功判定或删除原有传输/会话断言。修正后重新对精确提交执行 CI 和 iOS Full validation。
