@@ -4,7 +4,7 @@ body.leafy-admin-active {
   --s-subtle: #f7f8fa;
   --s-hover: #eef3f0;
   --s-text: #1c2721;
-  --s-muted: #69756e;
+  --s-muted: #637067;
   --s-border: #e1e7e3;
   --s-strong: #cbd5ce;
   --s-green: #16835b;
@@ -119,7 +119,7 @@ body.leafy-admin-active[data-admin-theme="dark"] {
   padding: 30px !important;
   min-width: 0;
 }
-.studio-content > main {
+.studio-content > .admin-content-inner {
   max-width: 1600px;
   margin: 0 auto;
 }
@@ -555,8 +555,8 @@ body.leafy-admin-active[data-admin-theme="dark"] {
   .leafy-admin-active *,
   .leafy-admin-active *::before,
   .leafy-admin-active *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    animation: none !important;
+    transition: none !important;
   }
 }
 @media (forced-colors: active) {

@@ -351,15 +351,22 @@ async function setup(page: Page, role = "super_admin") {
   return calls;
 }
 async function navigate(page: Page, label: string) {
-  const sidebar=page.locator('.admin-navigation');
-  if(!await sidebar.isVisible())await page.getByRole('button', { name: '切换导航', exact: true }).click();
-  await sidebar.getByRole('link', { name: label, exact: true }).click();
+  const toggle = page.getByRole("button", { name: "切换导航", exact: true }),
+    navigation = page.locator(".admin-navigation");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true")
+    await toggle.click();
+  await navigation.getByRole("link", { name: label, exact: true }).click();
+  if ((page.viewportSize()?.width ?? 1200) < 992)
+    await expect(navigation).toBeHidden();
 }
 async function choose(page: Page, name: string, value: string) {
-  const combobox=page.getByRole('combobox', { name, exact: true });
+  const combobox = page.getByRole("combobox", { name, exact: true });
   await combobox.focus();
-  await combobox.press('ArrowDown');
-  await page.locator('.ant-select-dropdown:visible').getByText(value, { exact: true }).click();
+  await combobox.press("ArrowDown");
+  await page
+    .locator(".ant-select-dropdown:visible")
+    .getByText(value, { exact: true })
+    .click();
 }
 test("Studio data browsing, scopes, saved views, details and dangerous confirmations", async ({
   page,
@@ -379,7 +386,7 @@ test("Studio data browsing, scopes, saved views, details and dangerous confirmat
       () => calls.filter((c) => c.action === "listPosts").at(-1)?.params.status,
     )
     .toBe("all");
-  await choose(page, '学校范围', '北京林业大学');
+  await choose(page, "学校范围", "北京林业大学");
   await expect
     .poll(
       () =>
@@ -439,7 +446,10 @@ test("sessions and audit logs show the owning admin name and a system placeholde
   await expect(
     page.getByRole("link", { name: "运维管理员", exact: true }),
   ).toBeVisible();
-  await page.locator("tbody").getByRole("button", { name: "撤销", exact: true }).click();
+  await page
+    .locator("tbody")
+    .getByRole("button", { name: "撤销", exact: true })
+    .click();
   await expect(page.getByText(/管理会话：运维管理员/)).toBeVisible();
   await page.getByRole("button", { name: "取消", exact: true }).click();
   await navigate(page, "审计日志");
@@ -475,7 +485,7 @@ test("every resource and diagnostics renders in light and dark themes", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   await setup(page);
   for (const theme of ["light", "dark"]) {
-    await choose(page, '主题', theme === 'light' ? '浅色' : '深色');
+    await choose(page, "主题", theme === "light" ? "浅色" : "深色");
     for (const path of resources.filter((r) => r !== "dashboard")) {
       await page.goto(`/admin/${path}`);
       await expect(page.locator("main h1")).toBeVisible();

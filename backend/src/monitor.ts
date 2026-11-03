@@ -32,7 +32,54 @@ const directory = resolve(
   process.env.MONITOR_DIRECTORY ?? `/var/lib/myleafy-monitor/${environment}`,
 );
 const store = new MonitorStore(join(directory, "monitoring.sqlite"));
-if (process.argv.includes("--report")) {
+if (process.argv.includes("--test-notifications")) {
+  const commit = process.argv[process.argv.indexOf("--test-notifications") + 1];
+  if (!/^[a-f0-9]{40}$/.test(commit ?? ""))
+    throw new Error(
+      "Provide the accepted source commit for test notification deduplication",
+    );
+  const ids: string[] = [];
+  for (const [kind, label] of [
+    ["report", "日报"],
+    ["alert", "异常"],
+    ["recovery", "恢复"],
+  ]) {
+    const id = `acceptance:${commit}:${kind}`;
+    ids.push(id);
+    store.enqueue(
+      id,
+      "acceptance",
+      `[MyLeafy 监控测试] ${label}`,
+      `这是 MyLeafy 监控系统的${label}送达测试，不代表生产服务发生故障。\n环境：${environment}\n源码：${commit}\n后台：https://myleafy.space/admin/monitoring/reports`,
+    );
+  }
+  for (let i = 0; i < 3; i++)
+    await deliverMail(store, {
+      enabled: true,
+      acceptanceOnly: true,
+      key: process.env.EMAIL_API_KEY,
+      from: process.env.EMAIL_FROM,
+      recipient: process.env.MONITOR_EMAIL_TO,
+      dailyLimit: 10,
+    });
+  const receipts = ids.map((id) =>
+    store.db
+      .prepare(
+        "SELECT id,status,attempts,providerId,error FROM deliveries WHERE id=?",
+      )
+      .get(id),
+  ) as any[];
+  console.log(
+    JSON.stringify({
+      testNotifications: true,
+      environment,
+      receipts,
+      mailError: store.get("mailError") ?? null,
+    }),
+  );
+  if (receipts.some((row) => row.status !== "sent")) process.exitCode = 1;
+  store.close();
+} else if (process.argv.includes("--report")) {
   queueDailyReport(store, environment);
   store.close();
 } else {
@@ -89,7 +136,10 @@ if (process.argv.includes("--report")) {
       );
       const metricValue = (index: number) => {
         const result = values[index];
-        if (result.status === "fulfilled") return result.value;
+        if (result.status === "fulfilled") {
+          if (result.value === null) errors.push("host_metrics_missing");
+          return result.value;
+        }
         errors.push("metrics_unavailable");
         return null;
       };
@@ -190,7 +240,12 @@ if (process.argv.includes("--report")) {
                 {
                   key: `task:${jobKeys[job]}`,
                   title: `定时任务 ${jobKeys[job]} 执行失败`,
-                  failing: task.status === "failed",
+                  failing:
+                    task.status === "failed"
+                      ? true
+                      : task.status === "succeeded"
+                        ? false
+                        : null,
                   forMs: 0,
                 },
                 now,
@@ -211,7 +266,7 @@ if (process.argv.includes("--report")) {
             timestamp: now,
             source: "monitor",
             event: "collection_gap",
-            duration: (now-previous)/1000,
+            duration: (now - previous) / 1000,
             level: "warning",
           },
         ]);
@@ -224,11 +279,21 @@ if (process.argv.includes("--report")) {
               : []),
           ]),
         ].join(",") || null;
-      if(sample.collectionError&&!previousError)store.set('collectionErrorSince',now);
-      if(!sample.collectionError&&previousError){
-        const since=store.get<number>('collectionErrorSince')??previous??now;
-        store.ingest([{timestamp:now,source:'monitor',event:'collection_gap',duration:Math.max(0,(now-since)/1000),level:'warning'}]);
-        store.set('collectionErrorSince',null);
+      if (sample.collectionError && !previousError)
+        store.set("collectionErrorSince", now);
+      if (!sample.collectionError && previousError) {
+        const since =
+          store.get<number>("collectionErrorSince") ?? previous ?? now;
+        store.ingest([
+          {
+            timestamp: now,
+            source: "monitor",
+            event: "collection_gap",
+            duration: Math.max(0, (now - since) / 1000),
+            level: "warning",
+          },
+        ]);
+        store.set("collectionErrorSince", null);
       }
       store.set("sample", sample);
       store.set("lastCollection", now);
@@ -336,7 +401,12 @@ if (process.argv.includes("--report")) {
           generatedAt: Date.now(),
           coverage: {
             ...store.coverage(),
-            partial: range.start < Number(store.get("startedAt") ?? Date.now()),
+            partial:
+              range.start <
+              Math.max(
+                Number(store.get("startedAt") ?? Date.now()),
+                Date.now() - 7 * 86_400_000,
+              ),
           },
           sample: store.get("sample") ?? null,
           summary: store.summary(range.start, range.end),
@@ -391,9 +461,13 @@ if (process.argv.includes("--report")) {
     process.on(signal, () => {
       stopping = true;
       clearInterval(timer);
-      server.close();
+      let httpClosed = false;
+      server.close(() => {
+        httpClosed = true;
+      });
+      server.closeIdleConnections();
       const wait = setInterval(() => {
-        if (!running) {
+        if (!running && httpClosed) {
           clearInterval(wait);
           store.close();
         }

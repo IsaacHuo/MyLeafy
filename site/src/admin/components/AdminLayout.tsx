@@ -80,8 +80,16 @@ Object.assign(names, {
   "android-releases": "Android 版本",
 });
 export function AdminLayout({ children }: { children: ReactNode }) {
-  const { campus, setCampus, identity, can, logout, themeMode, setThemeMode } =
-      useAdmin(),
+  const {
+      campus,
+      setCampus,
+      identity,
+      can,
+      logout,
+      themeMode,
+      setThemeMode,
+      dark,
+    } = useAdmin(),
     location = useLocation(),
     navigate = useNavigate(),
     screens = Grid.useBreakpoint();
@@ -210,7 +218,11 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     },
   ];
   const navigation = (
-    <aside className="admin-navigation">
+    <nav
+      id="admin-navigation"
+      aria-label="管理导航"
+      className="admin-navigation"
+    >
       <Link
         to="/"
         className="admin-brand"
@@ -244,7 +256,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           icon={<LogOut size={16} />}
         />
       </div>
-    </aside>
+    </nav>
   );
   return (
     <Layout className="admin-shell">
@@ -257,9 +269,9 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           width={248}
           collapsedWidth={0}
           collapsed={collapsed}
-          theme={document.body.dataset.adminTheme === "dark" ? "dark" : "light"}
+          theme={dark ? "dark" : "light"}
         >
-          {navigation}
+          {!collapsed && navigation}
         </Layout.Sider>
       ) : (
         <Drawer
@@ -279,6 +291,8 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             <Button
               type="text"
               aria-label="切换导航"
+              aria-expanded={!collapsed}
+              aria-controls="admin-navigation"
               icon={<MenuIcon size={18} />}
               onClick={() => setCollapsed((v) => !v)}
             />
@@ -333,7 +347,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           </Space>
         </Layout.Header>
         <Layout.Content className="studio-content">
-          <main id="admin-content">
+          <div id="admin-content" className="admin-content-inner">
             {schools.error && (
               <Alert
                 type="warning"
@@ -344,7 +358,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
               />
             )}{" "}
             {children}
-          </main>
+          </div>
         </Layout.Content>
         <Layout.Footer className="admin-footer">
           MyLeafy · 数据以服务端返回为准

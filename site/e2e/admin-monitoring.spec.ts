@@ -1,17 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
-declare const process:{env:{MONITOR_NAV_DEBUG?:string}};
-
-const navigationDebug=new WeakMap<Page,string[]>();
-test.afterEach(async({page},info)=>{const entries=navigationDebug.get(page);if(entries)await info.attach('navigation-debug',{body:JSON.stringify(entries,null,2),contentType:'application/json'});});
-async function setup(page: Page, role = "super_admin", stale = false) {
-  if(process.env.MONITOR_NAV_DEBUG){
-    const entries:string[]=[];navigationDebug.set(page,entries);
-    page.on('framenavigated',frame=>{if(frame===page.mainFrame())entries.push('FRAME '+frame.url());});
-    page.on('request',request=>{if(request.isNavigationRequest())entries.push('REQUEST '+request.url());});
-    page.on('console',message=>{if(message.text().startsWith('MONITOR_NAV'))entries.push(message.text());});
-    await page.addInitScript(()=>{for(const method of ['pushState','replaceState'] as const){const original=history[method];history[method]=function(...args){console.debug('MONITOR_NAV',method,String(args[2]));return original.apply(this,args);};}});
-  }
-
+async function setup(
+  page: Page,
+  role = "super_admin",
+  stale = false,
+  path = "/admin/monitoring",
+) {
   const now = Date.now(),
     calls: { action: string; params: any }[] = [];
   const identity = {
@@ -169,8 +162,17 @@ async function setup(page: Page, role = "super_admin", stale = false) {
       };
     return route.fulfill({ json: { data, meta: { request_id: "test" } } });
   });
-  await page.goto("/admin/monitoring");
+  await page.goto(path);
   return calls;
+}
+async function navigate(page: Page, label: string) {
+  const toggle = page.getByRole("button", { name: "切换导航", exact: true }),
+    navigation = page.locator(".admin-navigation");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true")
+    await toggle.click();
+  await navigation.getByRole("link", { name: label, exact: true }).click();
+  if ((page.viewportSize()?.width ?? 1200) < 992)
+    await expect(navigation).toBeHidden();
 }
 test("monitoring presents resources, traffic, redacted logs and delivery receipts", async ({
   page,
@@ -190,16 +192,16 @@ test("monitoring presents resources, traffic, redacted logs and delivery receipt
     path: info.outputPath("monitoring-overview.png"),
     fullPage: true,
   });
-  await page.goto("/admin/monitoring/traffic");
+  await navigate(page, "流量与接口");
   await expect(
     page.getByRole("cell", { name: "/v1/catalog/:kind", exact: true }),
   ).toBeVisible();
-  await page.goto("/admin/monitoring/server");
+  await navigate(page, "主机与服务");
   await expect(page.getByText("CPU（%）", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("cell", { name: "succeeded", exact: true }),
   ).toBeVisible();
-  await page.goto("/admin/monitoring/requests");
+  await navigate(page, "访问日志");
   await expect(
     page.getByRole("cell", { name: "192.0.2.0/24", exact: true }),
   ).toBeVisible();
@@ -214,15 +216,15 @@ test("monitoring presents resources, traffic, redacted logs and delivery receipt
   await page.getByRole("button", { name: "详情", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("request-test-1");
   await page.getByRole("button", { name: "关闭", exact: true }).click();
-  await page.goto("/admin/monitoring/logs");
+  await navigate(page, "应用与系统日志");
   await expect(
     page.getByRole("cell", { name: "api_error", exact: true }),
   ).toBeVisible();
-  await page.goto("/admin/monitoring/alerts");
+  await navigate(page, "告警");
   await expect(
     page.getByRole("cell", { name: "CPU 持续超过 85%", exact: true }),
   ).toBeVisible();
-  await page.goto("/admin/monitoring/reports");
+  await navigate(page, "日报与发送记录");
   await expect(page.getByText("不完整", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "详情", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("provider-test");
@@ -247,3 +249,28 @@ test("viewer cannot access monitoring even through a direct URL", async ({
     page.getByRole("link", { name: "监控总览", exact: true }),
   ).toHaveCount(0);
 });
+
+for (const [path, title] of [
+  ["", "监控总览"],
+  ["traffic", "流量与接口"],
+  ["server", "主机与服务"],
+  ["requests", "访问日志"],
+  ["logs", "应用与系统日志"],
+  ["alerts", "告警"],
+  ["reports", "日报与发送记录"],
+]) {
+  test(`monitoring deep link ${path || "overview"} loads independently`, async ({
+    page,
+  }) => {
+    await setup(
+      page,
+      "super_admin",
+      false,
+      "/admin/monitoring" + (path ? "/" + path : ""),
+    );
+    await expect(
+      page.getByRole("heading", { name: title, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
+}

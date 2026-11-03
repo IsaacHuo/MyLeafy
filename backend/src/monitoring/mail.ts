@@ -34,18 +34,61 @@ export function queueDailyReport(
     !summary.coverage.collectionError &&
     !gaps &&
     !summary.coverage.capacityLimited;
+  const display = (value: unknown, digits = 2) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? value.toLocaleString("zh-CN", { maximumFractionDigits: digits })
+      : "未采集";
+  const clock = (value: unknown) =>
+    typeof value === "number" || typeof value === "string"
+      ? new Date(value).toLocaleString("zh-CN", {
+          timeZone: "Asia/Shanghai",
+          hour12: false,
+        })
+      : "未采集";
+  const status = (value: unknown) =>
+    value === true ? "正常" : value === false ? "异常" : "未知";
+  const sample = summary.sample ?? {},
+    peak = summary.peaks ?? {};
+  const serviceLines =
+    Object.entries(sample.services ?? {})
+      .map(([name, value]) => `  ${name}：${status((value as any).healthy)}`)
+      .join("\n") || "  未采集";
+  const alertLines =
+    (summary.alerts as any[])
+      .map(
+        (row) =>
+          `  ${row.resolvedAt ? "已恢复" : "未恢复"} · ${row.title}（首次 ${clock(row.firstSeen)}）`,
+      )
+      .join("\n") || "  暂无已记录告警";
+  const errorLines =
+    (summary.topErrors as any[])
+      .map(
+        (row) =>
+          `  ${row.source} / ${row.event}${row.code ? " / " + row.code : ""}：${row.count} 次`,
+      )
+      .join("\n") || "  暂无已记录错误";
+  const tasks = store.get<any>("taskSnapshot")?.tasks ?? [];
+  const taskLines =
+    tasks
+      .map(
+        (row: any) =>
+          `  ${row.job} UTC：${row.status === "succeeded" ? "成功" : row.status === "failed" ? "失败" : "执行中"}，最近完成 ${clock(row.finished_at)}`,
+      )
+      .join("\n") || "  未采集";
   const body = [
     `MyLeafy ${environment} 每日报告`,
-    `${new Date(period.start).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })} — ${new Date(period.end).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`,
+    `统计范围（北京时间）：${clock(period.start)} — ${clock(period.end)}`,
     complete
-      ? "采集范围：完整（服务端请求统计，不代表活跃用户）"
-      : "采集范围：不完整，首日或采集中断；未采集部分不计为正常",
-    `请求：${summary.requests}；响应流量：${summary.bytes} 字节；5xx：${summary.errors}；P95：${summary.p95 ?? "未采集"} 秒`,
-    `资源峰值：${summary.peaks ? JSON.stringify(summary.peaks) : "未采集"}`,
-    `最新服务/备份状态：${JSON.stringify(summary.sample)}`,
-    `异常与恢复：${JSON.stringify(summary.alerts)}`,
-    `主要错误：${JSON.stringify(summary.topErrors)}`,
-    "详情：https://myleafy.space/admin/monitoring/reports",
+      ? "采集范围完整；请求数不代表活跃用户。"
+      : "采集范围不完整：首日、断采或容量清理。以下累计值仅涵盖已采集部分，不能据此认定全天正常或零访问。",
+    `流量与接口\n  已记录请求：${display(summary.requests, 0)}\n  响应流量：${display(summary.bytes / 1048576)} MiB\n  5xx：${display(summary.errors, 0)} 次（${display(summary.errorRate === null ? null : summary.errorRate * 100)}%）\n  P50 / P95 / P99：${display(summary.p50)} / ${display(summary.p95)} / ${display(summary.p99)} 秒`,
+    `资源峰值\n  CPU：${display(peak.cpu)}%\n  内存：${display(peak.memory)}%\n  磁盘：${display(peak.disk)}%`,
+    `当前服务状态（采集于 ${clock(sample.timestamp)}）\n${serviceLines}`,
+    `备份\n  最近成功：${clock(sample.backup?.successAt)}\n  最近结果：${sample.backup?.failed === true ? "失败" : sample.backup?.failed === false ? "成功" : "未采集"}`,
+    `定时任务\n${taskLines}`,
+    `异常与恢复\n${alertLines}`,
+    `主要错误\n${errorLines}`,
+    "后台详情：https://myleafy.space/admin/monitoring/reports",
   ].join("\n\n");
   store.db.transaction(() => {
     store.enqueue(id, "report", `[MyLeafy 日报] ${period.key}`, body, now);
@@ -72,6 +115,7 @@ export async function deliverMail(
     from?: string;
     recipient?: string;
     dailyLimit?: number;
+    acceptanceOnly?: boolean;
   },
   now = Date.now(),
   request: typeof fetch = fetch,
@@ -102,9 +146,9 @@ export async function deliverMail(
   const delivery = store.db.transaction(() => {
     const row = store.db
       .prepare(
-        "SELECT * FROM deliveries WHERE status='pending' AND nextAttempt<=? AND (leaseUntil IS NULL OR leaseUntil<?) ORDER BY CASE kind WHEN 'report' THEN 0 ELSE 1 END,createdAt LIMIT 1",
+        "SELECT * FROM deliveries WHERE status='pending' AND nextAttempt<=? AND (leaseUntil IS NULL OR leaseUntil<?) AND (?=0 OR kind='acceptance') ORDER BY CASE kind WHEN 'report' THEN 0 ELSE 1 END,createdAt LIMIT 1",
       )
-      .get(now, now) as any;
+      .get(now, now, settings.acceptanceOnly ? 1 : 0) as any;
     if (row)
       store.db
         .prepare("UPDATE deliveries SET leaseUntil=? WHERE id=?")

@@ -7,6 +7,7 @@ User=myleafy-monitor
 Group=myleafy-monitor
 SupplementaryGroups=systemd-journal caddy
 EnvironmentFile=/etc/myleafy/%i.monitor.env
+Environment=NODE_OPTIONS=--network-family-autoselection-attempt-timeout=2000
 WorkingDirectory=/opt/myleafy/%i/current/backend
 ExecStart=/usr/local/bin/node dist/monitor.mjs
 Restart=on-failure

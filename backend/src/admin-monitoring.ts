@@ -3,11 +3,29 @@ import { adminGuard, type AdminContext } from "./admin-auth";
 import { ApiError } from "./http";
 import { actionKinds, validateQuery } from "./monitoring/model";
 
-export async function auditMonitorDenial(env:BackendEnv,context:AdminContext,action:string){
-  try{
-    const state=await env.DB.prepare('SELECT mode FROM backend_control WHERE id=1').first<{mode:string}>();
-    if(state?.mode==='active')await env.DB.prepare("INSERT INTO admin_audit_logs(admin_id,action,target_type,request_id,outcome,error_code) VALUES(?,?,'monitoring',?,'failure','forbidden')").bind(context.id,action,context.requestId).run();
-  }catch{console.error(JSON.stringify({event:'monitor_access_audit_failed',request_id:context.requestId}));}
+export async function auditMonitorDenial(
+  env: BackendEnv,
+  context: AdminContext,
+  action: string,
+) {
+  try {
+    const state = await env.DB.prepare(
+      "SELECT mode FROM backend_control WHERE id=1",
+    ).first<{ mode: string }>();
+    if (state?.mode === "active")
+      await env.DB.prepare(
+        "INSERT INTO admin_audit_logs(admin_id,action,target_type,request_id,outcome,error_code) VALUES(?,?,'monitoring',?,'failure','forbidden')",
+      )
+        .bind(context.id, action, context.requestId)
+        .run();
+  } catch {
+    console.error(
+      JSON.stringify({
+        event: "monitor_access_audit_failed",
+        request_id: context.requestId,
+      }),
+    );
+  }
 }
 
 export async function adminMonitoring(
@@ -18,7 +36,7 @@ export async function adminMonitoring(
 ) {
   adminGuard(env, context, "super_admin");
   try {
-    validateQuery(actionKinds[action],params);
+    validateQuery(actionKinds[action], params);
   } catch (error) {
     throw new ApiError(400, "bad_request", (error as Error).message);
   }

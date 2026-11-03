@@ -6,9 +6,14 @@
 }
 (monitoring) {
   import /etc/myleafy/Caddyfile.monitoring-routes
-  map {http.request.header.User-Agent} {monitor_probe} {
+  # Update these self-addresses with the public/private IPs when moving ECS.
+  # A public client cannot hide access records by copying the probe User-Agent.
+  map "{remote_host}|{http.request.header.User-Agent}" {monitor_probe} {
     default false
-    MyLeafy-Monitor/1 true
+    "127.0.0.1|MyLeafy-Monitor/1" true
+    "::1|MyLeafy-Monitor/1" true
+    "8.141.82.15|MyLeafy-Monitor/1" true
+    "172.16.119.69|MyLeafy-Monitor/1" true
   }
   log_append probe {monitor_probe}
   log_append route {monitor_route}

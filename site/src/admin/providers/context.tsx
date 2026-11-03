@@ -32,11 +32,13 @@ const Context = createContext<{
   campus: string;
   setCampus: (value: string) => void;
   themeMode: string;
+  dark: boolean;
   setThemeMode: (value: string) => void;
 }>({
   campus: "all",
   setCampus: () => {},
   themeMode: "system",
+  dark: false,
   setThemeMode: () => {},
 });
 export function AdminProviders({ children }: { children: ReactNode }) {
@@ -69,6 +71,7 @@ export function AdminProviders({ children }: { children: ReactNode }) {
       theme={{
         algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
+          motion: false,
           colorPrimary: "#16835b",
           borderRadius: 8,
           fontFamily:
@@ -105,6 +108,7 @@ export function AdminProviders({ children }: { children: ReactNode }) {
                 void queryClient.cancelQueries();
               },
               themeMode,
+              dark,
               setThemeMode: setMode,
             }}
           >

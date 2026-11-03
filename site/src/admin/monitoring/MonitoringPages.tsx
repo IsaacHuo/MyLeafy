@@ -202,6 +202,7 @@ function Coverage({ value }: { value: Row }) {
       {value?.partial && (
         <Alert
           type="info"
+          role="status"
           showIcon
           message="所选时间范围早于采集开始，当前结果只覆盖已采集部分。"
         />
@@ -328,7 +329,7 @@ function MetricChart({
   const [metric, setMetric] = useState(initial),
     query = useMonitor("monitoringSeries", range, { metric }),
     element = useRef<HTMLDivElement>(null);
-  const { themeMode } = useAdmin();
+  const { dark } = useAdmin();
   useEffect(() => {
     if (!element.current || !query.data?.series?.length) return;
     let active = true,
@@ -338,10 +339,7 @@ function MetricChart({
     void import("../dashboard/echarts-runtime")
       .then(({ echarts }) => {
         if (!active || !element.current) return;
-        chart = echarts.init(
-          element.current,
-          document.body.dataset.adminTheme === "dark" ? "dark" : undefined,
-        );
+        chart = echarts.init(element.current, dark ? "dark" : undefined);
         chart.setOption({
           backgroundColor: "transparent",
           animation: false,
@@ -369,7 +367,7 @@ function MetricChart({
       resize.disconnect();
       chart?.dispose();
     };
-  }, [query.data, metric, themeMode]);
+  }, [query.data, metric, dark]);
   const points = query.data?.series?.flatMap((s: Row) => s.points) ?? [],
     latest = points.length ? points[points.length - 1]?.[1] : null;
   return (
@@ -414,6 +412,7 @@ function Traffic({ value, range }: { value: Row; range: Range }) {
     <>
       <Alert
         type="info"
+        role="status"
         showIcon
         message="统计到达服务器并完成的请求，包含网站、API 与下载；请求量不代表活跃用户。长连接流量在连接结束后计入。"
       />
@@ -709,6 +708,7 @@ function Records({ kind, range }: { kind: string; range: Range }) {
       {kind === "reports" && (
         <Alert
           type="info"
+          role="status"
           message="日报每天北京时间 21:00 发往指定 QQ 邮箱。发送状态与服务商回执可在详情查看；回执不等同于收件人实际收到。"
         />
       )}

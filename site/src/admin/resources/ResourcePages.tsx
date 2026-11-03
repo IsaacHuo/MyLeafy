@@ -503,9 +503,18 @@ export function ResourceList({
             aria-label={config.label}
             rowKey={(r) => String(r.id)}
             dataSource={rows}
-            columns={definitions.filter(
-              (c) => c.key === "actions" || visibility[String(c.key)] !== false,
-            ).map((column,index)=>({...column,fixed:index===0&&column.key!=='actions'?'left' as const:undefined}))}
+            columns={definitions
+              .filter(
+                (c) =>
+                  c.key === "actions" || visibility[String(c.key)] !== false,
+              )
+              .map((column, index) => ({
+                ...column,
+                fixed:
+                  index === 0 && column.key !== "actions"
+                    ? ("left" as const)
+                    : undefined,
+              }))}
             pagination={false}
             scroll={{ x: "max-content" }}
             rowSelection={
