@@ -73,7 +73,7 @@ export async function operationalHealth(
     rows(env.DB, "SELECT mode FROM backend_control WHERE id=1"),
     rows(
       env.DB,
-      "SELECT r.* FROM scheduled_runs r WHERE r.started_at=(SELECT max(s.started_at) FROM scheduled_runs s WHERE s.job=r.job) ORDER BY job",
+      "SELECT r.* FROM scheduled_runs r JOIN (SELECT job,max(started_at) latest FROM scheduled_runs GROUP BY job) t ON r.job=t.job AND r.started_at=t.latest ORDER BY r.job",
     ),
     rows(
       env.DB,

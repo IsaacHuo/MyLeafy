@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
-vi.mock('../src/signals', () => ({ ChangeSignals: class {} }));
-vi.mock('../src/admin-entrypoint', () => ({ AdminAPI: class {} }));
+vi.mock("../src/signals", () => ({ ChangeSignals: class {} }));
+vi.mock("../src/admin-entrypoint", () => ({ AdminAPI: class {} }));
 import { TestDatabase } from "./sqlite-local";
 import type { Actor, BackendEnv } from "../src/auth";
 import type { AdminContext } from "../src/admin-auth";
@@ -88,12 +88,26 @@ const event = (at = new Date()) => ({
 });
 it("removed telemetry cannot ingest events and business overview still works", async () => {
   const { db, env, context } = fixture();
-  const response = await app.request('/v1/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }, env);
+  const response = await app.request(
+    "/v1/activity",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    },
+    env,
+  );
   expect(response.status).toBe(404);
   const result = await overview(env, context, { days: 7 });
-  expect(result.summary.operations).toMatchObject({ totalProfiles: 1, completeProfiles: 1 });
-  expect(result.summary.operations).not.toHaveProperty('activity');
-  expect(result.analyticsMeta.moderationStartedAt).toBe(db.sqlite.prepare('SELECT started_at FROM moderation_collection').get()!.started_at);
+  expect(result.summary.operations).toMatchObject({
+    totalProfiles: 1,
+    completeProfiles: 1,
+  });
+  expect(result.summary.operations).not.toHaveProperty("activity");
+  expect(result.analyticsMeta.moderationStartedAt).toBe(
+    db.sqlite.prepare("SELECT started_at FROM moderation_collection").get()!
+      .started_at,
+  );
 });
 it("natural days use IANA rules across both DST transitions and validate calendar dates", () => {
   expect(dateBoundary("2026-03-08", "America/New_York")).toBe(
@@ -359,4 +373,46 @@ it("publication exceptions can be hidden but incomplete media cannot be restored
   expect(
     db.sqlite.prepare("SELECT status FROM posts WHERE id=?").get(id)!.status,
   ).toBe("hidden");
+});
+
+it("latest task diagnostics stay bounded with a large task history and preserve timestamp ties", async () => {
+  const { db, env, context } = fixture();
+  const insert = db.sqlite.prepare(
+    "INSERT INTO scheduled_runs(id,job,started_at,status) VALUES(?,?,?,'succeeded')",
+  );
+  const start = Date.parse("2026-01-01T00:00:00Z");
+  db.native.transaction(() => {
+    for (let i = 0; i < 10000; i++)
+      insert.run(
+        "history-" + i,
+        "job-" + (i % 4),
+        new Date(start + i * 1000).toISOString(),
+      );
+    insert.run(
+      "latest-tie",
+      "job-0",
+      new Date(start + 9996 * 1000).toISOString(),
+    );
+  })();
+  const prepare = db.prepare.bind(db);
+  vi.spyOn(db, "prepare").mockImplementation((sql: string) => {
+    if (sql.includes("FROM scheduled_runs")) {
+      const plan = db.sqlite.prepare("EXPLAIN QUERY PLAN " + sql).all() as {
+        detail: string;
+      }[];
+      expect(plan.some((row) => row.detail.includes("CORRELATED"))).toBe(false);
+    }
+    return prepare(sql);
+  });
+  const health = await operationalHealth(env, context);
+  expect(health.tasks).toHaveLength(5);
+  expect(health.tasks.map((row) => row.id)).toEqual(
+    expect.arrayContaining([
+      "history-9996",
+      "latest-tie",
+      "history-9997",
+      "history-9998",
+      "history-9999",
+    ]),
+  );
 });
