@@ -126,15 +126,15 @@ jobs:
           archive="package-output/myleafy-${RELEASE_COMMIT}.tar.gz"
           hash=$(cat "$archive.sha256")
           remote="/var/tmp/myleafy-${GITHUB_RUN_ID}.tar.gz"
-          workbench exec -i "$ECS_INSTANCE" -r cn-beijing -c "test ! -e '$remote'" -o json
-          workbench upload "$archive" "$remote" -i "$ECS_INSTANCE" -r cn-beijing
+          python3 backend/scripts/ecs/workbench-safe.py exec -i "$ECS_INSTANCE" -r cn-beijing -c "test ! -e '$remote'" -o json
+          python3 backend/scripts/ecs/workbench-safe.py upload "$archive" "$remote" -i "$ECS_INSTANCE" -r cn-beijing
           # Bootstrap and protected per-environment configuration are owner-operated.
-          workbench exec -i "$ECS_INSTANCE" -r cn-beijing --timeout 600 -c "MYLEAFY_PRODUCTION_ACCEPTED='$RELEASE_COMMIT' bash /opt/myleafy/install-release.sh '$TARGET' '$RELEASE_COMMIT' '$remote' '$hash'" -o json
+          python3 backend/scripts/ecs/workbench-safe.py exec -i "$ECS_INSTANCE" -r cn-beijing --timeout 600 -c "MYLEAFY_PRODUCTION_ACCEPTED='$RELEASE_COMMIT' bash /opt/myleafy/install-release.sh '$TARGET' '$RELEASE_COMMIT' '$remote' '$hash'" -o json
           if [[ "$TARGET" == staging ]]; then
-            workbench exec -i "$ECS_INSTANCE" -r cn-beijing --timeout 120 -c "cd /opt/myleafy/staging/current/backend && /usr/local/bin/node --env-file=/etc/myleafy/staging.env scripts/staging-smoke.mjs" -o json
+            python3 backend/scripts/ecs/workbench-safe.py exec -i "$ECS_INSTANCE" -r cn-beijing --timeout 120 -c "cd /opt/myleafy/staging/current/backend && /usr/local/bin/node --env-file=/etc/myleafy/staging.env scripts/staging-smoke.mjs" -o json
           fi
           mkdir -p deployment-report
-          workbench download "/opt/myleafy/$TARGET/deployment.json" deployment-report/deployment.json -i "$ECS_INSTANCE" -r cn-beijing
+          python3 backend/scripts/ecs/workbench-safe.py download "/opt/myleafy/$TARGET/deployment.json" deployment-report/deployment.json -i "$ECS_INSTANCE" -r cn-beijing
       - uses: actions/upload-artifact@v4
         if: inputs.environment == 'staging'
         with:
