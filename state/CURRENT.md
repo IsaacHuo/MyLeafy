@@ -6,6 +6,8 @@ Last verified: 2026-10-23 (Android three-tab/parity batch verified on API 36 emu
 
 ## Current Focus
 
+- **Android 历史 PR 收尾（2026-11-04）**：汇总 #52、#57、#64 的已实现修复：课表编辑器等待真实 DataStore 值后初始化和允许保存，后台身份恢复应用持久化课表作息；平板校园页各领域都展示同步结果；长跑提醒保存期间防重复提交，并在对话框内展示失败原因和保护未保存修改。不改 Room、共享协议、版本号或正式 APK；验证与交付边界见 [PLATFORMS](PLATFORMS.md)。旧 1.2.6 候选 #37 已被正式 1.2.8 取代并归档。
+
 - **Admin 与监控已交付（2026-11-04）**：Refine 5 / Ant Design 5 保留原 82 项动作并新增六项超级管理员监控读取。生产运行 `7e092f09ca64fa9d8cb836c03d982b818794818b`；完整 staging 41837627173 通过，所有者批准 production 41840198192 后，因 runner 的 OSS 传输失败，经 Workbench 手动发布相同已校验产物。任务诊断的大历史查询阻塞已修复；约 11 万条 staging 历史实测诊断约 282 ms、并发健康约 223 ms，所有者确认修复后的诊断与社区正常。三封测试邮件实收，日报和异常通知已启用，21:00 定时器运行；首日报告标记采集不完整并在故障恢复后补发。原生云事件联系人及接入授权已配置，官方模拟事件 TriggerRealOps=false 的阿里云告警邮件也已由所有者确认实收。本机旧备份/演练副本与旧构建缓存按要求清理，服务器数据、自动备份及密钥保留；新电脑连接提示词和恢复边界已同步 Configuration。见 [交付](../docs/operations/admin-monitoring-delivery.md) 与 [排查](../logs/2026-11-04-admin-diagnostics-query-block.md)。
 
 - **北林教务登录可靠性（2026-11-03）**：修复双端学校固定公告误识别、真实错误漏提取与无效密钥提交；iOS 增加认证操作互斥/取消保护并改用学校 JavaScript 的 UTF-16 编码语义。登录仅在本次会话验证页有明确认证内容时成功；学校错误与验证码拒绝分开，不盲目重发密码。共享 1,235 组编码预期与离线登录流程覆盖见 [排查记录](../logs/2026-11-03-bjfu-login-reliability.md)，跟踪 [#67](https://github.com/IsaacHuo/MyLeafy/issues/67)。远程 iOS 17 最低目标构建和最终组合全量 XCTest（797 通过、0 失败、1 既有跳过）、Android Debug 与 32 项定向 JVM 测试通过；本轮真实学校登录、设备 Keychain 和商店发行未验收。

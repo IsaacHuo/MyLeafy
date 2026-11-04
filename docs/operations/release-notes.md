@@ -10,15 +10,20 @@ Android 使用独立候选准备与管理员验收发布流程，以及 `android
 
 核对日期：2026-10-23（Asia/Shanghai）。GitHub Release/tag、商店和当前源码是不同证据；公开商店查询不能证明内部 build 和源码提交。当前功能差异见 [PLATFORMS](../../state/PLATFORMS.md)。
 
+2026-11-04 补核 Android 1.2.8 的正式 Release、tag、code 与资产摘要；本次整理未重新安装 APK，也未重新核验 iOS 商店版本。
+
 | 平台 / 版本 | 状态与分发证据 | Build / code | 源码 / tag | 验收边界 |
 |---|---|---|---|---|
 | iOS 3.2.5 | [中国区 App Store](https://apps.apple.com/cn/app/id6763968535) / [公开查询](https://itunes.apple.com/lookup?id=6763968535&country=cn)，发布时间 2026-10-18 06:49 +08:00 | 待核实 | 待核实；不能从当前 main 推断 | 商店上架已核实；精确二进制、build 与源码对应关系见 [#38](https://github.com/IsaacHuo/MyLeafy/issues/38) |
 | iOS 3.0 | GitHub 草稿，不作为正式发行证据 | 待核实 | 草稿 target 为 main，不是确定源码锚点 | 不推断 App Store 交付或测试结果 |
 | iOS 2.9 | [正式 GitHub 源码记录](https://github.com/IsaacHuo/MyLeafy/releases/tag/v2.9)，历史记录见下文 | 27（仓库既有 Apple 记录） | `6d5c0331266b49461153fb47b9a17a1f37e5a230` / `v2.9` | 本轮未重新验收历史二进制 |
-| Android 1.2.6 | 私有 `android-candidate-10`，未正式发布 | 10 | `592c54b30d84bcd089eecf1034cd53ba10c0b9ce` | 待所有者下载、正式包覆盖升级及管理员授权，见 [#37](https://github.com/IsaacHuo/MyLeafy/issues/37) |
+| Android 1.2.8 | [正式 Release 与 APK](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.2.8)，2026-10-24 | 12 | `0e705e4f22a3202c38ec240822c5e73372598376` / `android-v1.2.8` | 所有者已确认迁移后现有 App 正常；本次仅补核发行元数据，不扩展为完整移动端回归 |
+| Android 1.2.6 | 历史私有 `android-candidate-10`，未正式发布，已被后续正式版本取代 | 10 | `592c54b30d84bcd089eecf1034cd53ba10c0b9ce` | [#37](https://github.com/IsaacHuo/MyLeafy/issues/37) 已按旧候选不再推进归档，不补记覆盖升级验收 |
 | Android 1.2.4 | [正式 Release 与 APK](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.2.4)，2026-10-09 | 8 | `c9ff99fd8373a7acc3895a01d835bfbcd7ca5a0c` / `android-v1.2.4` | 正式发布记录已核实；本轮未重做真机验收 |
 
 Android 1.2.4 正式 APK 的 GitHub asset SHA-256 为 `332b5d80aec17d63805e09c7896ba6181b2a1b6589c1372994f837730e0205f9`；同一 Release 附构建信息与校验文件。1.2.6 私有候选 APK 的 asset SHA-256 为 `4e80c223ac7043e0b937546e6ed0b0e548ba0de2b9d3d7f78e179cee8eecaa80`。这里核对的是发行元数据，未重新下载或安装 APK。
+
+Android 1.2.8 正式 APK 的 GitHub asset SHA-256 为 `c741481ceddbd15cb6ac0ecd106b2ff4c1bafce1de7cf92090799a8112bda040`，大小 5,860,825 字节；正式 tag 指向与上表一致，源码 `versionCode = 12`。不修改既有发行资产或 tag。
 
 当前主线另包含 **iOS 3.2.6 / build 1 的源码准备**（App、Widget、Share Extension 一致）。尚未据此执行 Apple 正式发布或创建正式 tag；不能覆盖上表的已核实商店记录。
 

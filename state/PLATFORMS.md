@@ -1,6 +1,14 @@
 # 双端功能、验证与交付状态
 
-核对日期：2026-10-24。实现基于本次整合的当前源码，包含 iOS Ponytail 全仓审计、Android 对齐、历史待合修复和双端规范化。源码准备版本为 iOS 3.2.6 / build 1、Android 1.2.6 / code 10；不代表已发行。2026-10-23 的全量整合只做静态检查；2026-10-24 的 iOS 设备编译、完整远程 CI 及后续集成证据集中在 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)。历史单分支结果与最终组合分开。
+## Android 历史 PR 收尾（2026-11-04）
+
+汇总 #52、#57、#64：课表设置等待真实 DataStore 首值后初始化并允许保存，冷启动后台身份恢复应用已存作息；校园双栏同步横幅位于各领域共用位置；长跑提醒保存失败在对话框内可见，并保留保存中状态和未保存退出提示。只调整 Android 本机行为，不改共享 DTO、Room schema 或版本号。
+
+当前组合的 `spotlessCheck`、`assembleDebug` 通过；完整 JVM/Robolectric 共 208 项，201 通过、7 项既有外部探测跳过、0 失败，含双栏同步提示两项回归。测试依赖下载中断后，使用 Maven 官方同版本包并校验 SHA-512 补齐缓存重跑；未修改测试断言或依赖版本。未做实际设备交互验收、通知投递测试或正式 APK 发布。原 #37 的 1.2.6 私有候选已被正式 1.2.8 取代，不再单独推进；后续发行以发布索引为准。
+
+## 跨端基线（2026-10-24）
+
+核对日期：2026-10-24。实现基于当时整合的源码，包含 iOS Ponytail 全仓审计、Android 对齐、历史待合修复和双端规范化。当时源码准备版本为 iOS 3.2.6 / build 1、Android 1.2.6 / code 10；不代表已发行。2026-10-23 的全量整合只做静态检查；2026-10-24 的 iOS 设备编译、完整远程 CI 及后续集成证据集中在 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)。历史单分支结果与最终组合分开。
 
 ## 如何读取
 
@@ -44,7 +52,7 @@
 | 自动化用例 | [leafyTests](../leafyTests/) 含 AcademicReliability、CampusNavigation、TimetablePersonalSync、ScheduleMemo、ICloudSyncInfrastructure、社区队列等；测试存在不等于本轮执行通过 | [JVM / Roborazzi](../android/app/src/test/) 与 [原生设备测试](../android/app/src/androidTest/) 含解析、作用域 Room、共享、通知规划、导航及背景生命周期 |
 | 历史执行 | [CURRENT](CURRENT.md) 保留各任务独立结果及中断记录；最近 iCloud 修复只完成签名/构建，实际同步未完成验收 | [课表背景记录](../docs/design/android-timetable-backdrop.md) 保留 76 项截图、175 JVM 通过/7 跳过及设备范围；[核心审查](../docs/design/android-core-review.md) 记录隔离后台与系统投递边界 |
 | 本轮工程验证 | 规范化独立分支曾通过最低目标构建和 XCTest（659 通过、1 跳过），且 199 个格式化文件的字符串解析值一致；2026-10-23 含 Ponytail 的整合只做静态检查；2026-10-24 的累计提交验证与 CI 修复以 PR #46 精确提交为准 | 独立分支的构建/JVM/Lint/截图及设备结果分别见相关报告；本次对完整整合源码执行格式化，未重跑 Android 构建或测试，不将历史成功扩大为最终组合通过 |
-| 发布前人工验收 | 真实学校会话、真机 UI/系统日历、iCloud 生产与双设备；[iOS 发行锚点 #38](https://github.com/IsaacHuo/MyLeafy/issues/38) 待补 | 正式包覆盖升级及候选验收见 [#37](https://github.com/IsaacHuo/MyLeafy/issues/37)；实际系统通知/后台共享与媒体仍需独立核验 |
+| 发布前人工验收 | 真实学校会话、真机 UI/系统日历、iCloud 生产与双设备；[iOS 发行锚点 #38](https://github.com/IsaacHuo/MyLeafy/issues/38) 待补 | 当时的 1.2.6 候选 [#37](https://github.com/IsaacHuo/MyLeafy/issues/37) 已被后续正式版取代并归档；现有发行见发布索引，实际系统通知/后台共享与媒体仍需独立核验 |
 
 本轮工具与流程追踪于 [#35](https://github.com/IsaacHuo/MyLeafy/issues/35)，不把本轮验证扩展成生产发布结论。候选、正式版与本次源码分别管理。
 
