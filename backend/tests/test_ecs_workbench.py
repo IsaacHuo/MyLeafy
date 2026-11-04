@@ -40,7 +40,7 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual((code, count), (5, 1))
 
     def test_retries_only_recognized_upload_transport_errors(self):
-        failed = subprocess.CompletedProcess([], 1, "", "upload failed: upload: upload to OSS: i/o timeout")
+        failed = subprocess.CompletedProcess([], 1, "", "upload failed: upload: upload to OSS: context deadline exceeded")
         success = subprocess.CompletedProcess([], 0, "uploaded", "")
         code, _, count = self.run_wrapper(["upload", "artifact", "/var/tmp/artifact"], [failed, success])
         self.assertEqual((code, count), (0, 2))

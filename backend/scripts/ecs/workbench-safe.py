@@ -24,7 +24,7 @@ def transport_failure(result, arguments):
     return (
         arguments[:1] == ["upload"]
         and "upload to oss" in combined
-        and any(word in combined for word in ("i/o timeout", "connection reset", "tls handshake timeout"))
+        and any(word in combined for word in ("i/o timeout", "connection reset", "tls handshake timeout", "context deadline exceeded"))
     )
 
 
