@@ -4,7 +4,9 @@
 
 ## 当前生产交付
 
-运行提交 `f544392b7ded8fd0b3fe59fadedeaf949c6994a5`，成功 staging [41319033640](https://github.com/IsaacHuo/MyLeafy/actions/runs/41319033640)、所有者批准的 production [41323260270](https://github.com/IsaacHuo/MyLeafy/actions/runs/41323260270)。七个服务域名直连 `8.141.82.15`，HTTPS 校验通过，原业务/发行控制策略已恢复。所有者确认现有 App 和网站正常；原 code 12 APK 5,860,825 字节完整下载及 Range/哈希验证通过，未重建或签名。
+最新 Admin/监控版本及实际发布、邮件和恢复边界见 [交付记录](admin-monitoring-delivery.md)。以下初次迁移结果是历史证据；本机旧数据备份已按所有者要求清理，不将历史下载记录视为当前可恢复副本。
+
+初次迁移运行提交 `f544392b7ded8fd0b3fe59fadedeaf949c6994a5`，成功 staging [41319033640](https://github.com/IsaacHuo/MyLeafy/actions/runs/41319033640)、所有者批准的 production [41323260270](https://github.com/IsaacHuo/MyLeafy/actions/runs/41323260270)。七个服务域名直连 `8.141.82.15`，HTTPS 校验通过，原业务/发行控制策略已恢复。所有者确认现有 App 和网站正常；原 code 12 APK 5,860,825 字节完整下载及 Range/哈希验证通过，未重建或签名。
 
 迁移后生产备份 SHA-256 `323e08b85890b75dfba57eb6394832df62cb20fa9f22b40f4af4808d96e6812a` 已下载至 Mac 并恢复校验 71 表、499 对象。本机长期恢复包位于 `~/MyLeafy-Server-Backups/2026-11-02/`，密钥独立保存在受保护位置。可移植配置与换机手册见 [Configuration/myleafy-ecs](https://github.com/IsaacHuo/Configuration/tree/main/myleafy-ecs)。
 
