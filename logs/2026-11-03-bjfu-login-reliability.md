@@ -30,7 +30,7 @@ iOS 显式注入隔离 request loader 和凭据保存器，逐项检查保存参
 - Android：`spotlessApply spotlessCheck`、Debug APK 构建与五个相关 JVM 测试类全部通过，32 项通过、0 失败/跳过。1,235 组编码向量由一个参数化循环用例逐项检查，不计为 1,235 项独立测试。
 - 仓库：12 项 CI 选择/汇总规则回归、分层检查、任务 Swift 格式与 diff 检查通过。
 - iOS：初版在任务专用 DerivedData 中串行执行 iOS 17 最低目标 build-for-testing，通过并生成新测试 bundle。随后既有模拟器报告 Data Migration Failed，未执行用例；新建隔离模拟器仍停在 ContainerMigrator，且主机出现磁盘不足。补充恢复表单重复点击保护后的增量构建在资产编译阶段因磁盘不足中断，不能扩大此前构建结论为最终源码通过。
-- 已保留构建/启动日志，并只清理本任务 DerivedData、新建测试设备和任务 worktree 生成的 Android build 目录；未清理其他工作区、既有模拟器或用户数据。最终 iOS 源码将通过远程 Full validation 验证，结果按精确提交补充。
+- 已保留构建/启动日志，并只清理本任务 DerivedData、新建测试设备和任务 worktree 生成的 Android build 目录；未清理其他工作区、既有模拟器或用户数据。最终 iOS 组合源码已通过远程 Full validation，精确提交和结果见下文。
 - 基础 CI 按最终精确提交另行核对；未进行真实学校登录、真机交互或发布 App。
 
 ### 首次远程全量结果与修正
@@ -52,3 +52,11 @@ iOS 显式注入隔离 request loader 和凭据保存器，逐项检查保存参
 `692dbe2` 保留 `768baea` 的 iOS 菜单与分享卡片后，基础 CI [41581880923](https://github.com/IsaacHuo/MyLeafy/actions/runs/41581880923) 通过；iOS Full validation [41581882685](https://github.com/IsaacHuo/MyLeafy/actions/runs/41581882685) 构建通过，798 项中 796 通过、1 既有跳过、1 失败。全部登录用例通过，唯一失败是既有 `testCommunityFeedStagesLatestSnapshotUntilUserAppliesIt` 的 `XCTAssertTrue`。
 
 该测试在异步暂存刷新后固定睡眠 100ms 再断言，而刷新经过会话、并发帖子/投票和 actor 调度；社区生产代码及该用例与已通过的独立修复版本完全一致。同文件的合并刷新用例已采用最多 3 秒、每 10ms 检查完成条件的方式。只将失败用例改用相同的有界条件等待，保留暂存、未自动应用、用户应用和缓存的全部断言，不修改社区生产行为或跳过用例。调整后重新验证组合源码。
+
+### 最终组合验证与交付核对（2026-11-04）
+
+- `8b4eafa99981c84cc046ee8963b0c9817081b2a7` 的基础 CI [41583650965](https://github.com/IsaacHuo/MyLeafy/actions/runs/41583650965) 与 iOS Full validation [41583655677](https://github.com/IsaacHuo/MyLeafy/actions/runs/41583655677) 均通过。包含最新 iOS 主线与本轮修复的组合源码已完成 iOS 17 最低目标构建，798 项中 797 通过、0 失败、1 项既有跳过；16 项新增登录用例全部通过。
+- 社区暂存刷新用例改为有界条件等待后通过，全部原有业务断言保留；没有修改社区生产代码或新增跳过。
+- Android Debug 与 32 项定向 JVM 测试通过；共享 1,235 组编码向量均已在双端逐项验证。后续没有 Android 实现或依赖变化。
+- 最后只补充验证文档，移动端实现、测试、共享 fixtures 和构建入口与上述已验证源码一致；最终文档提交的精确基础 CI 以 [PR #69](https://github.com/IsaacHuo/MyLeafy/pull/69) 为准，不重复已通过的编译与测试。
+- [#67](https://github.com/IsaacHuo/MyLeafy/issues/67) 保持 Acceptance：仍待真实学校账号首次登录、重新登录、自动恢复、设备 Keychain 及真机交互验收。未使用真实学生凭据自动测试，未发布 App，也未改动学校系统。
