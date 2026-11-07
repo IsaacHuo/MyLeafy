@@ -178,6 +178,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     );
   const business = [
     ["work-queue", "待办"],
+    ["android-releases", names["android-releases"]],
     ...Object.entries(resourceConfigs)
       .filter(([key]) => !system.some(([name]) => name === key))
       .map(([key, c]) => [key, names[key] ?? c.label]),

@@ -26,12 +26,16 @@ test('admin verifies a candidate before publishing and keeps iOS outside version
   await expect(page.getByText('发布中',{exact:true})).toBeVisible();expect(published).toBe(true);
 });
 
-test('operators can inspect candidates but have no publication button',async({page})=>{
+for(const role of ['operator','viewer']) {
+test(`${role} can inspect candidates but cannot publish, retry or revoke`,async({page})=>{
   await page.route('**/api/admin/**',async route=>{
     const path=new URL(route.request().url()).pathname;
-    if(path.endsWith('/me'))return route.fulfill({json:{admin:{id:'operator-1',username:'operator',display_name:'运营',role:'operator',active:true},permissions:[{resource:'android-releases',actions:['list','show']}],session:{expires_at:'2099-01-01T00:00:00Z'}}});
-    return route.fulfill({json:{data:{items:[{id:'candidate',versionName:'1.2.2',versionCode:6,status:'failed',releaseNotes:'测试',sizeBytes:7}],total:1,page:0,pageSize:20},meta:{audit_logged:true}}});
+    if(path.endsWith('/me'))return route.fulfill({json:{admin:{id:role,username:role,display_name:role,role,active:true},permissions:[{resource:'android-releases',actions:['list','show']}],session:{expires_at:'2099-01-01T00:00:00Z'}}});
+    return route.fulfill({json:{data:{items:['ready','failed','published'].map((status,index)=>({id:`candidate-${index}`,versionName:`1.2.${index}`,versionCode:index+1,status,releaseNotes:'测试',sizeBytes:7})),total:3,page:0,pageSize:20},meta:{audit_logged:true}}});
   });
   await page.goto('/admin/android-releases');
-  await expect(page.getByText('发布失败',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'重试发布'})).toHaveCount(0);
+  await expect(page.getByText('发布失败',{exact:true})).toBeVisible();
+  for(const name of ['发布','重试发布','撤回'])await expect(page.getByRole('button',{name,exact:true})).toHaveCount(0);
+  await expect(page.getByRole('link',{name:'下载验收'})).toHaveCount(2);
 });
+}

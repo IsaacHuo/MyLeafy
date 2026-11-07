@@ -68,7 +68,7 @@ const overview = {
     generatedAt: "2026-10-13T08:00:00Z",
   },
 };
-async function setup(page: Page, role = "super_admin") {
+async function setup(page: Page, role = "super_admin", androidAccess = true) {
   page.setDefaultTimeout(15_000);
   let loggedIn = false;
   const calls: { action: string; params: any }[] = [];
@@ -81,6 +81,7 @@ async function setup(page: Page, role = "super_admin") {
       active: true,
     },
     permissions: resources
+      .filter((resource) => androidAccess || resource !== "android-releases")
       .filter(
         (r) =>
           role !== "viewer" ||
@@ -95,7 +96,7 @@ async function setup(page: Page, role = "super_admin") {
       .map((resource) => ({
         resource,
         actions:
-          role === "viewer"
+          role === "viewer" || (resource === "android-releases" && role !== "super_admin")
             ? ["list", "show"]
             : ["list", "show", "create", "edit", "delete", "bulk", "export"],
       })),
@@ -348,6 +349,7 @@ async function setup(page: Page, role = "super_admin") {
   await page.getByLabel("密码", { exact: true }).fill("test-only");
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page.getByRole("heading", { name: "运营总览" })).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/?\?campus=all$/);
   return calls;
 }
 async function navigate(page: Page, label: string) {
@@ -368,6 +370,53 @@ async function choose(page: Page, name: string, value: string) {
     .getByText(value, { exact: true })
     .click();
 }
+for (const role of ["super_admin", "operator", "viewer"]) {
+  test(`Android version navigation for ${role}`, async ({ page }) => {
+    const calls = await setup(page, role);
+    await navigate(page, "Android 版本");
+    await expect(page).toHaveURL(/\/admin\/android-releases(?:\?|$)/);
+    await expect(page.getByRole("heading", { name: "Android 版本", exact: true })).toBeVisible();
+    const selectedLink = page.locator(".admin-navigation .ant-menu-item-selected")
+      .getByRole("link", { name: "Android 版本", exact: true });
+    const checkSelectedNavigation = async () => {
+      const toggle = page.getByRole("button", { name: "切换导航", exact: true });
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+      await expect(selectedLink).toBeVisible();
+      await expect(selectedLink).toHaveAttribute("href", "/admin/android-releases");
+      if ((page.viewportSize()?.width ?? 1200) < 992) {
+        await page.keyboard.press("Escape");
+        await expect(page.locator(".admin-navigation")).toBeHidden();
+      }
+    };
+    await checkSelectedNavigation();
+    if (role !== "super_admin") {
+      await expect(page.getByRole("button", { name: "发布", exact: true })).toHaveCount(0);
+    }
+
+    const beforeRefresh = calls.filter((call) => call.action === "listAndroidReleases").length;
+    await page.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await expect.poll(() => calls.filter((call) => call.action === "listAndroidReleases").length)
+      .toBeGreaterThan(beforeRefresh);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Android 版本", exact: true })).toBeVisible();
+    await navigate(page, "Android 版本");
+    await checkSelectedNavigation();
+    await page.goto("/admin/android-releases");
+    await expect(page.getByRole("heading", { name: "Android 版本", exact: true })).toBeVisible();
+  });
+}
+
+test("Android version navigation respects missing read permission", async ({ page }) => {
+  const calls = await setup(page, "viewer", false);
+  const toggle = page.getByRole("button", { name: "切换导航", exact: true });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(page.locator(".admin-navigation").getByRole("link", { name: "Android 版本", exact: true }))
+    .toHaveCount(0);
+  await page.goto("/admin/android-releases");
+  await expect(page.locator("main").getByRole("alert")).toContainText("无权访问");
+  expect(calls.filter((call) => call.action === "listAndroidReleases")).toHaveLength(0);
+});
+
 test("Studio data browsing, scopes, saved views, details and dangerous confirmations", async ({
   page,
 }) => {

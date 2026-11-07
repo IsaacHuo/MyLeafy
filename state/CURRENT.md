@@ -6,6 +6,8 @@ Last verified: 2026-10-23 (Android three-tab/parity batch verified on API 36 emu
 
 ## Current Focus
 
+- **Admin Android 版本入口（2026-11-07，源码修复）**：Refine 侧栏补回「业务管理 → Android 版本」，继续使用 `/admin/android-releases` 独立页面和原有权限；运营/只读可查看，只有超级管理员可发布、重试和撤回。新增从总览菜单进入、移动抽屉、选中状态、刷新/直达及无权限拒绝的浏览器回归，发行操作只用模拟接口。上线与产品验收独立跟踪 [#77](https://github.com/IsaacHuo/MyLeafy/issues/77)，不修改 APK、接口或数据库。
+
 - **Android 历史 PR 收尾（2026-11-04）**：汇总 #52、#57、#64 的已实现修复：课表编辑器等待真实 DataStore 值后初始化和允许保存，后台身份恢复应用持久化课表作息；平板校园页各领域都展示同步结果；长跑提醒保存期间防重复提交，并在对话框内展示失败原因和保护未保存修改。不改 Room、共享协议、版本号或正式 APK；验证与交付边界见 [PLATFORMS](PLATFORMS.md)。旧 1.2.6 候选 #37 已被正式 1.2.8 取代并归档。
 
 - **Admin 与监控已交付（2026-11-04）**：Refine 5 / Ant Design 5 保留原 82 项动作并新增六项超级管理员监控读取。生产运行 `7e092f09ca64fa9d8cb836c03d982b818794818b`；完整 staging 41837627173 通过，所有者批准 production 41840198192 后，因 runner 的 OSS 传输失败，经 Workbench 手动发布相同已校验产物。任务诊断的大历史查询阻塞已修复；约 11 万条 staging 历史实测诊断约 282 ms、并发健康约 223 ms，所有者确认修复后的诊断与社区正常。三封测试邮件实收，日报和异常通知已启用，21:00 定时器运行；首日报告标记采集不完整并在故障恢复后补发。原生云事件联系人及接入授权已配置，官方模拟事件 TriggerRealOps=false 的阿里云告警邮件也已由所有者确认实收。本机旧备份/演练副本与旧构建缓存按要求清理，服务器数据、自动备份及密钥保留；新电脑连接提示词和恢复边界已同步 Configuration。见 [交付](../docs/operations/admin-monitoring-delivery.md) 与 [排查](../logs/2026-11-04-admin-diagnostics-query-block.md)。
