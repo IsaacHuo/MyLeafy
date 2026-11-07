@@ -6,7 +6,7 @@ Last verified: 2026-10-23 (Android three-tab/parity batch verified on API 36 emu
 
 ## Current Focus
 
-- **Admin Android 版本入口（2026-11-07，源码修复）**：Refine 侧栏补回「业务管理 → Android 版本」，继续使用 `/admin/android-releases` 独立页面和原有权限；运营/只读可查看，只有超级管理员可发布、重试和撤回。新增从总览菜单进入、移动抽屉、选中状态、刷新/直达及无权限拒绝的浏览器回归，发行操作只用模拟接口。上线与产品验收独立跟踪 [#77](https://github.com/IsaacHuo/MyLeafy/issues/77)，不修改 APK、接口或数据库。
+- **Admin Android 版本入口（2026-11-07，生产已验收）**：Refine 侧栏补回「业务管理 → Android 版本」，继续使用 `/admin/android-releases` 独立页面和原有权限；运营/只读可查看，只有超级管理员可发布、重试和撤回。生产与 staging 均运行 `831ab3f15f6af89d1805538b9a9c4dac04ac3526`；完整 staging 42336454110、所有者批准的 production 42337279249 均成功，复用同一产物。网站 74 项单元和 33 项相关浏览器用例通过，所有者确认菜单和版本列表正常；原 Android 1.2.9 元数据、摘要和 Range 下载保持。未修改 APK、接口或数据库，见 [交付记录](../docs/operations/admin-monitoring-delivery.md) / [#77](https://github.com/IsaacHuo/MyLeafy/issues/77)。
 
 - **Android 历史 PR 收尾（2026-11-04）**：汇总 #52、#57、#64 的已实现修复：课表编辑器等待真实 DataStore 值后初始化和允许保存，后台身份恢复应用持久化课表作息；平板校园页各领域都展示同步结果；长跑提醒保存期间防重复提交，并在对话框内展示失败原因和保护未保存修改。不改 Room、共享协议、版本号或正式 APK；验证与交付边界见 [PLATFORMS](PLATFORMS.md)。旧 1.2.6 候选 #37 已被正式 1.2.8 取代并归档。
 

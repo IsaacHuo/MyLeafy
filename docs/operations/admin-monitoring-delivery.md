@@ -1,8 +1,16 @@
 # Admin 与服务器监控交付
 
-2026-11-04，跟踪 #65。运行源码 `7e092f09ca64fa9d8cb836c03d982b818794818b`。
+2026-11-04 初次交付，跟踪 #65。当次运行源码 `7e092f09ca64fa9d8cb836c03d982b818794818b`。
 
-## 运行与验证
+## Android 版本入口修复（2026-11-07）
+
+[#77](https://github.com/IsaacHuo/MyLeafy/issues/77) / [PR #78](https://github.com/IsaacHuo/MyLeafy/pull/78)：业务菜单遗漏独立 Android 版本页，现已补回入口。原路由、查看/发布权限、API、数据库和 APK 均保持。新增从总览点击导航的回归覆盖三种角色、移动抽屉、选中状态、刷新/直达和权限拒绝；旧代码可准确复现缺失，发行请求只使用模拟接口。本地类型、生产构建、74 项单元及 33 项相关 Chromium/WebKit/iPad WebKit 用例通过。
+
+[完整 staging 42336454110](https://github.com/IsaacHuo/MyLeafy/actions/runs/42336454110) 与经所有者批准的 [production 42337279249](https://github.com/IsaacHuo/MyLeafy/actions/runs/42337279249) 均成功。两环境运行 `831ab3f15f6af89d1805538b9a9c4dac04ac3526`，生产消费同一 staging 产物；生产 deployment.json 完成于 2026-11-07T04:13:46.168Z，归档、文件、迁移和健康身份校验通过。
+
+生产官网 `/release.json` 与 API `/health` 提交一致，业务、监控和 Caddy 服务 active，部署文件中已包含新菜单。原 Android 1.2.9/code 13 发布元数据前后完全一致，APK SHA-256 仍为 `e61ea941af14641292ca3ad63ace8110f7632f0f026191b95b3bad916ec7ec41`；一次单字节 Range 请求为 206，不扩大为本轮重新校验完整 APK。所有者确认「菜单和版本列表都正常」，完成实际账号验收。
+
+## 初次交付运行与验证（2026-11-04）
 
 /admin 已使用 Refine 5 / Ant Design 5。原 82 项管理动作及六项新监控读取保留在契约内；原认证、CSRF、角色、学校范围、业务数据库与 App 协议保持。未构建或发布移动端。
 
