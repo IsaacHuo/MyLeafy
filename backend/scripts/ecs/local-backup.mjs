@@ -48,13 +48,13 @@ if(spawnSync('tar',['-tf',archive],{stdio:'ignore'}).status!==0)throw new Error(
 // The verified archive is the durable copy; restore extracts it before running restore.ts.
 await rm(directory,{recursive:true,force:true});
 console.log(JSON.stringify({complete:true,archive,sha256:hash,tables:snapshot.tables.length,objects:snapshot.objects.length}));
-// Retain archives newer than 3 days; a stale extraction directory is removed together with its snapshot.
+// Retain archives newer than 1 day; a stale extraction directory is removed together with its snapshot.
 for(const name of await readdir(backupRoot)){
  const match=name.match(/^(snapshot-\d{4}-\d{2}-\d{2}T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z)(?:\.tar(?:\.sha256)?)?$/);
  if(!match)continue;
  const [,base,hour,minute,second,millis]=match;
  const createdAt=Date.parse(base.slice('snapshot-'.length,'snapshot-YYYY-MM-DD'.length)+'T'+hour+':'+minute+':'+second+'.'+millis+'Z');
- if(Date.now()-createdAt<=3*86400000)continue;
+ if(Date.now()-createdAt<=86400000)continue;
  await rm(join(backupRoot,base),{recursive:true,force:true});
  await rm(join(backupRoot,base+'.tar'),{force:true});
  await rm(join(backupRoot,base+'.tar.sha256'),{force:true});

@@ -16,7 +16,7 @@
 - `/var/lib/myleafy/<environment>`：SQLite、私有 files、公开 releases、维护标记和恢复报告。
 - `/etc/myleafy/<environment>.env`：0600 运行配置，保留原生产认证与媒体签名 Secret；测试和生产独立。
 - `/etc/myleafy/<environment>.backup.env`：0600，仅包含 BACKUP_ENCRYPTION_KEY；密钥在服务器之外单独保留。
-- `/var/backups/myleafy/<environment>`：加密快照 tar 及同名 SHA-256；只保留最近 3 天，归档通过校验后不再保留解包目录（恢复时先解包再运行 restore）；备份不是公开网站文件。
+- `/var/backups/myleafy/<environment>`：加密快照 tar 及同名 SHA-256；只保留最近 1 天，归档通过校验后不再保留解包目录（恢复时先解包再运行 restore）；备份不是公开网站文件。
 
 bootstrap 只安装 Node 24.22.1、Caddy 2.11.7、系统用户和目录；不启动公网入口，不覆盖已存在配置。Node 使用 SHA-256，Caddy 官方清单使用 SHA-512，失败即停止。私有 Caddy 配置只监听 127.0.0.1:8081，另保存为 `/etc/myleafy/Caddyfile.private`。公开配置须备案后启用，继续导入该私有入口用于后续受控验收；公开 staging 启用时将其 SITE_ORIGIN 改为 https://staging.myleafy.space。www 跳转主域，下载域名继续服务原 APK。
 
@@ -87,7 +87,7 @@ workbench download /var/backups/myleafy/staging/SNAPSHOT.tar /LOCAL_PRIVATE_DIRE
 workbench download /var/backups/myleafy/staging/SNAPSHOT.tar.sha256 /LOCAL_PRIVATE_DIRECTORY/ -i i-2ze251tg6q9u5s25jkq4 -r cn-beijing
 ```
 
-服务器只保留最近 3 天的 `.tar`，解包目录在归档校验后即删除；恢复时先 `tar -xf SNAPSHOT.tar -C PRIVATE_BACKUP`，再按上文 restore 命令做演练或正式恢复。
+服务器只保留最近 1 天的 `.tar`，解包目录在归档校验后即删除；恢复时先 `tar -xf SNAPSHOT.tar -C PRIVATE_BACKUP`，再按上文 restore 命令做演练或正式恢复。
 
 Workbench 单文件传输上限按所安装版本核对。快照超过限制须分卷并分别校验；不跳过文件，也不以数据库成功代替文件成功。
 
