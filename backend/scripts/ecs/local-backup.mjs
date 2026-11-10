@@ -1,6 +1,6 @@
 import {inspectSchema} from './sql.mjs';
 import SQLite from 'better-sqlite3';
-import {readFile,readdir,mkdir,writeFile,rename,rm} from 'node:fs/promises';
+import {readFile,readdir,mkdir,writeFile,rm} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {parseEnv} from 'node:util';
 import {spawnSync} from 'node:child_process';
@@ -44,11 +44,18 @@ const tar=spawnSync('tar',['-C',directory,'-cf',archive,'.'],{stdio:'ignore'});
 if(tar.status!==0)throw new Error('Encrypted snapshot archive failed');
 const hash=sha(await readFile(archive));
 await writeFile(archive+'.sha256',hash+'  '+id+'.tar\n',{mode:0o600});
-await rename(directory,join(backupRoot,id));
+if(spawnSync('tar',['-tf',archive],{stdio:'ignore'}).status!==0)throw new Error('Encrypted snapshot archive verification failed');
+// The verified archive is the durable copy; restore extracts it before running restore.ts.
+await rm(directory,{recursive:true,force:true});
 console.log(JSON.stringify({complete:true,archive,sha256:hash,tables:snapshot.tables.length,objects:snapshot.objects.length}));
-// Retain only completed, machine-generated snapshots older than 30 days.
-for(const entry of await readdir(backupRoot,{withFileTypes:true})){
- if(!entry.isDirectory()||!/^snapshot-\d{4}-\d{2}-\d{2}T[\dZ-]+$/.test(entry.name))continue;
- const name=entry.name,date=name.slice('snapshot-'.length).replace(/T(\d\d)-(\d\d)-(\d\d)-(\d\d\d)Z$/,'T$1:$2:$3.$4Z');
- if(Date.now()-Date.parse(date)>30*86400000){await rm(join(backupRoot,name),{recursive:true});await rm(join(backupRoot,name+'.tar'),{force:true});await rm(join(backupRoot,name+'.tar.sha256'),{force:true});}
+// Retain archives newer than 3 days; a stale extraction directory is removed together with its snapshot.
+for(const name of await readdir(backupRoot)){
+ const match=name.match(/^(snapshot-\d{4}-\d{2}-\d{2}T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z)(?:\.tar(?:\.sha256)?)?$/);
+ if(!match)continue;
+ const [,base,hour,minute,second,millis]=match;
+ const createdAt=Date.parse(base.slice('snapshot-'.length,'snapshot-YYYY-MM-DD'.length)+'T'+hour+':'+minute+':'+second+'.'+millis+'Z');
+ if(Date.now()-createdAt<=3*86400000)continue;
+ await rm(join(backupRoot,base),{recursive:true,force:true});
+ await rm(join(backupRoot,base+'.tar'),{force:true});
+ await rm(join(backupRoot,base+'.tar.sha256'),{force:true});
 }
