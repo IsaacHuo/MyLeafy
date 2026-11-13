@@ -296,6 +296,8 @@ Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 2
 
 监控源码使用独立 monitor/systemd、SQLite 和 Prometheus，采集网关、Node、主机与允许来源的脱敏日志。管理代理仅向超级管理员开放固定只读查询；采集与发信不阻塞业务 API。端口、保留与验证边界见 [Admin 监控](../docs/engineering/admin-monitoring.md)。
 
+北林非校园网教务同步目前仅完成接入探针：ECS 可使用学校官方 HTTPS 网页 VPN 访问强智，并已通过本人教务认证及课表页面读取。`backend/scripts/academic-vpn/` 为独立、短期、仅回环的人工验证工具，不是公开生产接口；现有 App 仍使用原直连。后续连接器采用同一学校网页 VPN，隔离每次操作的 Cookie，不改宿主机默认路由；实现、会话复用和双端验收仍待 #79，见 [设计与验证边界](../docs/design/bjfu-academic-vpn-sync.md)。
+
 ## 11. 当前行为约束
 
 以下是不变量，修改代码前必须遵守（与 `docs/` 中的设计细节不同，这些是当前必须成立的事实）：
