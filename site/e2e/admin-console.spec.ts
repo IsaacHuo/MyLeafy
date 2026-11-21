@@ -68,9 +68,14 @@ const overview = {
     generatedAt: "2026-10-13T08:00:00Z",
   },
 };
-async function setup(page: Page, role = "super_admin", androidAccess = true) {
+async function setup(
+  page: Page,
+  role = "super_admin",
+  androidAccess = true,
+  authenticatedPath?: string,
+) {
   page.setDefaultTimeout(15_000);
-  let loggedIn = false;
+  let loggedIn = authenticatedPath !== undefined;
   const calls: { action: string; params: any }[] = [];
   const identity = {
     admin: {
@@ -344,6 +349,10 @@ async function setup(page: Page, role = "super_admin", androidAccess = true) {
       json: { data, meta: { request_id: "e2e", audit_logged: true } },
     });
   });
+  if (authenticatedPath !== undefined) {
+    await page.goto(authenticatedPath);
+    return calls;
+  }
   await page.goto("/admin");
   await page.getByLabel("账号", { exact: true }).fill(role);
   await page.getByLabel("密码", { exact: true }).fill("test-only");
@@ -407,13 +416,17 @@ for (const role of ["super_admin", "operator", "viewer"]) {
 }
 
 test("Android version navigation respects missing read permission", async ({ page }) => {
-  const calls = await setup(page, "viewer", false);
+  const calls = await setup(
+    page,
+    "viewer",
+    false,
+    "/admin/android-releases?campus=all",
+  );
+  await expect(page.locator("main").getByRole("alert")).toContainText("无权访问");
   const toggle = page.getByRole("button", { name: "切换导航", exact: true });
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   await expect(page.locator(".admin-navigation").getByRole("link", { name: "Android 版本", exact: true }))
     .toHaveCount(0);
-  await page.goto("/admin/android-releases");
-  await expect(page.locator("main").getByRole("alert")).toContainText("无权访问");
   expect(calls.filter((call) => call.action === "listAndroidReleases")).toHaveLength(0);
 });
 
