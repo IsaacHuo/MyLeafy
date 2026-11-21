@@ -105,25 +105,32 @@ export class MonitorStore {
     };
   }
   summary(start: number, end: number) {
+    const traffic =
+      "source='access' AND timestamp>=? AND timestamp<? AND route NOT IN('/health','/release.json') AND route NOT LIKE '/api/admin/%'";
+    const timedHttp = "status<>101 AND duration IS NOT NULL";
     const stats = this.db
       .prepare(
-        "SELECT count(*) AS requests,coalesce(sum(bytes),0) AS bytes,coalesce(sum(status>=500),0) AS errors,avg(duration) AS meanDuration FROM logs WHERE source='access' AND timestamp>=? AND timestamp<? AND route NOT IN('/health','/release.json') AND route NOT LIKE '/api/admin/%'",
+        `SELECT count(*) AS requests,coalesce(sum(bytes),0) AS bytes,coalesce(sum(status>=500),0) AS errors,
+                count(*) FILTER (WHERE ${timedHttp}) AS latencySamples,
+                avg(duration) FILTER (WHERE ${timedHttp}) AS meanDuration
+           FROM logs WHERE ${traffic}`,
       )
       .get(start, end) as {
       requests: number;
       bytes: number;
       errors: number;
+      latencySamples: number;
       meanDuration: number | null;
     };
     const percentile = (p: number) => {
-      if (!stats.requests) return null;
+      if (!stats.latencySamples) return null;
       return (
         (
           this.db
             .prepare(
-              "SELECT duration FROM logs WHERE source='access' AND timestamp>=? AND timestamp<? AND route NOT IN('/health','/release.json') AND route NOT LIKE '/api/admin/%' ORDER BY duration LIMIT 1 OFFSET ?",
+              `SELECT duration FROM logs WHERE ${traffic} AND ${timedHttp} ORDER BY duration LIMIT 1 OFFSET ?`,
             )
-            .get(start, end, Math.floor((stats.requests - 1) * p)) as Row
+            .get(start, end, Math.floor((stats.latencySamples - 1) * p)) as Row
         )?.duration ?? null
       );
     };
@@ -135,7 +142,7 @@ export class MonitorStore {
       p99: percentile(0.99),
       topRoutes: this.db
         .prepare(
-          "SELECT host,method,route,count(*) AS requests,sum(bytes) AS bytes,sum(status>=500) AS errors FROM logs WHERE source='access' AND timestamp>=? AND timestamp<? AND route NOT IN('/health','/release.json') AND route NOT LIKE '/api/admin/%' GROUP BY host,method,route ORDER BY requests DESC LIMIT 10",
+          `SELECT host,method,route,count(*) AS requests,sum(bytes) AS bytes,sum(status>=500) AS errors FROM logs WHERE ${traffic} GROUP BY host,method,route ORDER BY requests DESC LIMIT 10`,
         )
         .all(start, end),
       topErrors: this.db

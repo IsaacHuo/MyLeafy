@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { httpLatencyCutoverKey } from "./alerts";
 import { day, reportPeriod } from "./model";
 import { MonitorStore } from "./store";
 
@@ -16,9 +17,13 @@ export function queueDailyReport(
     sample: store.get("sample") ?? null,
     alerts: store.db
       .prepare(
-        "SELECT title,firstSeen,resolvedAt FROM alerts WHERE lastSeen>=? AND firstSeen<?",
+        "SELECT title,firstSeen,resolvedAt FROM alerts WHERE lastSeen>=? AND firstSeen<? AND (key<>'http-latency' OR firstSeen>=?)",
       )
-      .all(period.start, period.end),
+      .all(
+        period.start,
+        period.end,
+        store.get<number>(httpLatencyCutoverKey) ?? 0,
+      ),
     peaks: store.get("dailyPeaks:" + period.key) ?? null,
   };
   const gaps = (
