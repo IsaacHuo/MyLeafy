@@ -1419,9 +1419,9 @@ struct CourseDetailSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .leafyCardStyle()
 
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), alignment: .top),
-                                       count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: AppSpacing.compact
+                    CourseDetailInformationLayout(
+                        columns: dynamicTypeSize.isAccessibilitySize ? 1 : 2,
+                        spacing: AppSpacing.compact
                     ) {
                         CourseDetailRow(
                             title: "教室",
@@ -1431,7 +1431,7 @@ struct CourseDetailSheet: View {
                         )
                         CourseDetailRow(
                             title: "节次",
-                            value: course.compactDurationTextWithTime,
+                            value: course.periodTimesText,
                             icon: "clock",
                             compact: true
                         )
@@ -1824,9 +1824,10 @@ struct CourseDetailRow: View {
                         }
                     }
                     Text(value).leafyBody().foregroundStyle(AppTheme.primaryText)
+                        .lineSpacing(4)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(14)
+                .padding(18)
             } else {
                 HStack(alignment: .top, spacing: 14) {
                     LeafyIconBadge(systemName: icon)
@@ -1840,6 +1841,37 @@ struct CourseDetailRow: View {
             }
         }
         .leafyCardStyle()
+    }
+}
+
+/// All four information cards use the tallest card's natural height, including wrapped text.
+nonisolated struct CourseDetailInformationLayout: Layout {
+    var columns: Int
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard !subviews.isEmpty else { return .zero }
+        let count = max(columns, 1)
+        let idealWidth = subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+        let width = proposal.width ?? idealWidth * CGFloat(count) + spacing * CGFloat(count - 1)
+        let cellWidth = max((width - spacing * CGFloat(count - 1)) / CGFloat(count), 0)
+        let cellHeight = subviews.map { $0.sizeThatFits(ProposedViewSize(width: cellWidth, height: nil)).height }
+            .max() ?? 0
+        let rows = (subviews.count + count - 1) / count
+        return CGSize(width: width, height: cellHeight * CGFloat(rows) + spacing * CGFloat(rows - 1))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let count = max(columns, 1)
+        let rows = (subviews.count + count - 1) / count
+        let width = max((bounds.width - spacing * CGFloat(count - 1)) / CGFloat(count), 0)
+        let height = max((bounds.height - spacing * CGFloat(rows - 1)) / CGFloat(rows), 0)
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + CGFloat(index % count) * (width + spacing),
+                                      y: bounds.minY + CGFloat(index / count) * (height + spacing)),
+                          anchor: .topLeading, proposal: ProposedViewSize(width: width, height: height))
+        }
     }
 }
 
@@ -1890,18 +1922,12 @@ extension Course {
         return L10n.text("第 %d-%d 节", start, end)
     }
 
-    var compactDurationTextWithTime: String {
-        let periods = Array(Set(duration)).sorted()
-        var runs: [[Int]] = []
-        for period in periods {
-            if let last = runs.last?.last, period == last + 1 { runs[runs.count - 1].append(period) }
-            else { runs.append([period]) }
-        }
-        return runs.compactMap { run in
-            guard let first = run.first, let last = run.last,
-                  let start = TimetablePeriodSchedule.slot(for: first),
-                  let end = TimetablePeriodSchedule.slot(for: last) else { return nil }
-            return "\(first): \(start.startText)–\(end.endText)"
+    var periodTimesText: String {
+        Array(Set(duration)).sorted().map { period in
+            guard let slot = TimetablePeriodSchedule.slot(for: period) else {
+                return "\(period): \(L10n.text("未填写"))"
+            }
+            return "\(period): \(slot.startText)–\(slot.endText)"
         }.joined(separator: "\n")
     }
 

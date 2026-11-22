@@ -159,15 +159,20 @@ final class TimetableFollowupTests: XCTestCase {
         XCTAssertFalse(try ICloudLocalData.markUnlinkedEdits(in: context))
     }
 
-    func testCompactPeriodTextKeepsGapsAsSeparateRuns() {
-        let contiguous = course(); contiguous.duration = [6, 7, 8, 9]
-        XCTAssertEqual(contiguous.compactDurationTextWithTime,
-                       "6: \(TimetablePeriodSchedule.slot(for: 6)!.startText)–\(TimetablePeriodSchedule.slot(for: 9)!.endText)")
-        contiguous.duration = [6, 8, 9]
-        let runs = contiguous.compactDurationTextWithTime.components(separatedBy: "\n")
-        XCTAssertEqual(runs.count, 2)
-        XCTAssertTrue(runs[0].hasPrefix("6: "))
-        XCTAssertTrue(runs[1].hasPrefix("8: "))
+    func testPeriodTimesListEveryPeriodAndItsOwnTime() {
+        let course = course(); course.duration = [6, 7, 8, 9]
+        let lines = course.periodTimesText.components(separatedBy: "\n")
+        XCTAssertEqual(lines.count, 4)
+        for (index, period) in [6, 7, 8, 9].enumerated() {
+            let slot = TimetablePeriodSchedule.slot(for: period)!
+            XCTAssertEqual(lines[index], "\(period): \(slot.startText)–\(slot.endText)")
+        }
+        course.duration = [9, 6, 8, 6]
+        let separated = course.periodTimesText.components(separatedBy: "\n")
+        XCTAssertEqual(separated.count, 3)
+        XCTAssertTrue(separated[0].hasPrefix("6: "))
+        XCTAssertTrue(separated[1].hasPrefix("8: "))
+        XCTAssertTrue(separated[2].hasPrefix("9: "))
     }
 
     func testConfigurationAndDataUpdatesWaitForDragAndCoalesce() {
