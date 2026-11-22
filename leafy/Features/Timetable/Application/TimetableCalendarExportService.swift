@@ -555,7 +555,7 @@ final class TimetableCalendarExportService {
                   TimetableCalendarExportBuilder.occurrenceKey(from: event.url) == key,
                   selection.contains(key: key, startDate: event.startDate) else { continue }
             collect([event])
-            if !selection.interval.contains(event.startDate) {
+            if event.startDate < selection.interval.start || event.startDate >= selection.interval.end {
                 let day = UserTimetableSettings.calendar.startOfDay(for: event.startDate)
                 if searchedDays.insert(day).inserted,
                    let end = UserTimetableSettings.calendar.date(byAdding: .day, value: 1, to: day) {
