@@ -167,6 +167,24 @@ final class AcademicConnectorTests: XCTestCase {
         )
     }
 
+    func testClearingAllLocalDataRemovesSavedAndUnsavedVPNCredentials() throws {
+        let (settings, vault, defaults, suite) = fixtureSettings()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let a = owner("synthetic-a"), b = owner("synthetic-b")
+        let credential = SchoolVPNCredential(account: "synthetic", password: "synthetic")
+        try settings.configure(credential, remember: true, identity: a)
+        try settings.configure(credential, remember: false, identity: b)
+        try settings.configure(credential, remember: true, identity: nil)
+        try settings.removeAll()
+        XCTAssertEqual(vault.count, 0)
+        for identity in [a, b] {
+            XCTAssertFalse(settings.isEnabled(for: identity))
+            XCTAssertNil(try settings.credential(for: identity))
+        }
+        XCTAssertFalse(settings.isEnabled(for: nil))
+        XCTAssertNil(try settings.credential(for: nil))
+    }
+
     func testOneActionReusesVPNThroughReauthenticationThenReleasesIt() async throws {
         let (settings, _, defaults, suite) = fixtureSettings()
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -257,7 +275,7 @@ final class AcademicConnectorTests: XCTestCase {
         XCTAssertFalse(connection.isConnected)
     }
 
-    func testVPNTimetableValidatesExistingSchoolSessionBeforeRequestingLogin() async throws {
+    func testVPNTimetableUsesExistingSchoolSessionBeforeRequestingLogin() async throws {
         let (settings, _, defaults, suite) = fixtureSettings()
         defer { defaults.removePersistentDomain(forName: suite) }
         let identity = owner("synthetic-session")
@@ -287,7 +305,7 @@ final class AcademicConnectorTests: XCTestCase {
         let document = try await manager.fetchTimetable()
         XCTAssertTrue(document.html.contains("kbtable"))
         let requests = await api.requestPaths()
-        XCTAssertEqual(requests, ["/jsxsd/framework/xsMain.jsp", "/jsxsd/xskb/xskb_list.do"])
+        XCTAssertEqual(requests, ["/jsxsd/xskb/xskb_list.do"])
         let counts = await api.counts()
         XCTAssertEqual(counts.starts, 1)
         XCTAssertEqual(counts.closes, 1)
@@ -377,6 +395,11 @@ private nonisolated final class AcademicTestVPNVault: SchoolVPNVault, @unchecked
         lock.lock(); defer { lock.unlock() }
         if failure { throw SchoolVPNStorageFailure.keychain(-1) }
         records.removeValue(forKey: owner)
+    }
+    func removeAll() throws {
+        lock.lock(); defer { lock.unlock() }
+        if failure { throw SchoolVPNStorageFailure.keychain(-1) }
+        records.removeAll()
     }
 }
 

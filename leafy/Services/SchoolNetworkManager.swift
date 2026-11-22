@@ -207,6 +207,12 @@ final class SchoolNetworkManager: ObservableObject {
             operation: operation
         )
     }
+
+    func connectionFailureDescription(_ error: Error) -> String {
+        let message = error.localizedDescription
+        guard let warning = academicConnection?.cleanupWarning, !message.contains(warning) else { return message }
+        return message + "\n" + warning
+    }
 }
 
 extension SchoolNetworkManager {

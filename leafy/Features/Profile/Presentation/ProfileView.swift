@@ -2201,12 +2201,15 @@ private struct CacheAndSyncView: View {
         defer { isSyncing = false; refreshCacheSummary() }
         do {
             let useCase = TimetableRefreshUseCase()
+            progressController.reporter(for: .timetable)(.begin(.fetchingTimetable))
             let document = try await SchoolConnectionRoute.$modeOverride.withValue(refreshConnectionMode) {
                 try await useCase.fetchDocument()
             }
             try scope.check()
+            progressController.reporter(for: .timetable)(.begin(.processingTimetable))
             let records = try await TimetableRefreshUseCase.parseRecords(html: document.html)
             try scope.check()
+            progressController.reporter(for: .timetable)(.begin(.savingTimetable))
             let saved = try useCase.persist(
                 records: records,
                 existingCourses: courses,
@@ -2232,8 +2235,9 @@ private struct CacheAndSyncView: View {
                 )
             } else {
                 progressController.clear()
-                TimetableCacheMetadata.lastFailureMessage = error.localizedDescription
-                vpnFailure = "\(error.localizedDescription)\n已保留上次成功同步的课表。直连前请手动连接校园网。"
+                let failureMessage = networkManager.connectionFailureDescription(error)
+                TimetableCacheMetadata.lastFailureMessage = failureMessage
+                vpnFailure = "\(failureMessage)\n已保留上次成功同步的课表。直连前请手动连接校园网。"
             }
         }
     }

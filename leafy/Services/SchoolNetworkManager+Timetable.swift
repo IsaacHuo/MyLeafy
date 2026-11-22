@@ -352,16 +352,9 @@ extension SchoolNetworkManager {
         let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled { throw SchoolNetworkError.featureUnavailable("演示模式使用本地课表样例，不连接学校教务系统。") }
         if currentPortal == .graduate { return try await fetchGraduateTimetable() }
-        if connectionMode == .serverVPN, !isLoggedIn {
-            guard let url = URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp") else { throw URLError(.badURL) }
-            let (page, _) = try await html(from: url)
-            try scope.check()
-            guard isAuthenticatedResponse(url: nil, html: page) else { throw SchoolNetworkError.sessionExpired }
-            isLoggedIn = true
-        }
         let initial = try await fetchDefaultTimetable()
         try scope.check()
-        if connectionMode == .serverVPN { return initial }
+        if connectionMode == .serverVPN { isLoggedIn = true; return initial }
         let options = try timetableTermOptions(in: initial.html, selector: "select[name=xnxq01id] option")
         for term in options {
             let document: FetchedTimetableDocument
@@ -398,7 +391,7 @@ extension SchoolNetworkManager {
             return try await fetchGraduateTimetable()
         }
 
-        guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
+        guard isLoggedIn || connectionMode == .serverVPN else { throw URLError(.userAuthenticationRequired) }
         guard let rootURL = URL(string: baseURL),
               let timetableURL = URL(string: "\(baseURL)/jsxsd/xskb/xskb_list.do"),
               let mainURL = URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp"),

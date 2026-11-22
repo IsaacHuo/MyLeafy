@@ -38,4 +38,20 @@ final class SchoolTimetableConnection {
     }
 
     func cancel() { vpnManager?.academicConnection?.cancel() }
+
+    func clearSession() {
+        cancel()
+        vpnManager = nil
+        owner = nil
+        revision = nil
+        SchoolVPNSettingsStore.shared.finishUse(for: ActiveCampusContext.identity)
+        _ = SchoolSessionCredentialStore.delete(
+            identity: ActiveCampusContext.identity,
+            portal: .undergraduate,
+            connection: .serverVPN
+        )
+        for name in ["serverVPN.isLoggedIn", "serverVPN.lastLandingURL"] {
+            UserDefaults.standard.removeObject(forKey: CampusScopedDefaults.key(name))
+        }
+    }
 }

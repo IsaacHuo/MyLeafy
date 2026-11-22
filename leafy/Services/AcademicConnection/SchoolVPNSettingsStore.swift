@@ -30,9 +30,18 @@ nonisolated protocol SchoolVPNVault: Sendable {
     func load(owner: String) throws -> SchoolVPNCredential?
     func save(_ credential: SchoolVPNCredential, owner: String) throws
     func remove(owner: String) throws
+    func removeAll() throws
 }
 
 nonisolated struct KeychainSchoolVPNVault: SchoolVPNVault {
+    func removeAll() throws {
+        let status = SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.myleafy.school-vpn"
+        ] as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound
+        else { throw SchoolVPNStorageFailure.keychain(status) }
+    }
     private func query(_ owner: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
          kSecAttrService as String: "com.myleafy.school-vpn",
@@ -178,6 +187,18 @@ final class SchoolVPNSettingsStore: ObservableObject {
 
     private func enabledKey(_ identity: CampusIdentity)
         -> String { "leafy.campus.\(identity.scopeKey).academicVPNEnabled" }
+    func removeAll() throws {
+        try vault.removeAll()
+        transient.removeAll()
+        pendingLogin = nil
+        pendingLoginEnabled = false
+        storageWarning = nil
+        for key in defaults.dictionaryRepresentation().keys
+            where key.hasPrefix("leafy.campus.") && key.hasSuffix(".academicVPNEnabled") {
+            defaults.removeObject(forKey: key)
+        }
+        revision &+= 1
+    }
     private func supports(_ identity: CampusIdentity) -> Bool {
         identity.campusID == .bjfu && identity.portal == .undergraduate && !identity.isGuest && !identity.isCustom
     }

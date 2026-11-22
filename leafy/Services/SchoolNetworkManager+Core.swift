@@ -291,7 +291,7 @@ extension SchoolNetworkManager {
     }
 
     func clearSession() {
-        SchoolTimetableConnection.shared.cancel()
+        SchoolTimetableConnection.shared.clearSession()
         cancelInFlightRequests()
         SchoolDataPrefetchCoordinator.shared.cancel()
         clearPersistedCookies()

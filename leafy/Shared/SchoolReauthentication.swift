@@ -293,7 +293,7 @@ private struct SchoolReauthenticationModifier: ViewModifier {
     }
 
     private func recoveryErrorMessage(_ error: Error) -> String {
-        return error.localizedDescription
+        return networkManager.connectionFailureDescription(error)
     }
 }
 
@@ -598,7 +598,7 @@ private struct SchoolReauthenticationSheet: View {
                     language: leafyLanguage
                 )
             } else {
-                errorMessage = error.localizedDescription
+                errorMessage = networkManager.connectionFailureDescription(error)
             }
         }
     }
@@ -635,7 +635,7 @@ private struct SchoolReauthenticationSheet: View {
         } catch {
             guard !Task.isCancelled else { return }
             showsCredentialFields = true
-            errorMessage = error.localizedDescription
+            errorMessage = networkManager.connectionFailureDescription(error)
             captchaCode = ""
             isLoggingIn = false
             await fetchCaptcha(resetError: false)

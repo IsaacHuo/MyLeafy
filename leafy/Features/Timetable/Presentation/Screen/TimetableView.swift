@@ -2409,8 +2409,9 @@ struct TimetableView: View {
                 isFetching = false
                 requiresPeriodConfiguration = error is TimetableConfigurationRequired
                 emptyResultIdentity = error is TimetableEmptyResult ? ActiveCampusContext.identity : nil
-                TimetableCacheMetadata.lastFailureMessage = error.localizedDescription
-                lastFailureMessage = error.localizedDescription
+                let failureMessage = networkManager.connectionFailureDescription(error)
+                TimetableCacheMetadata.lastFailureMessage = failureMessage
+                lastFailureMessage = failureMessage
                 publishWidgetSnapshot()
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
                     reauthenticationRequest = SchoolReauthenticationRequest(
@@ -2421,8 +2422,8 @@ struct TimetableView: View {
                     progressController.clear()
                     offersConnectionRecovery = networkManager.connectionMode == .serverVPN
                     alertMessage = courses.isEmpty
-                        ? L10n.text("获取课表失败：%@", language: leafyLanguage, error.localizedDescription)
-                        : L10n.text("获取课表失败，已继续显示本地缓存：%@", language: leafyLanguage, error.localizedDescription)
+                        ? L10n.text("获取课表失败：%@", language: leafyLanguage, failureMessage)
+                        : L10n.text("获取课表失败，已继续显示本地缓存：%@", language: leafyLanguage, failureMessage)
                     showAlert = true
                 }
             }

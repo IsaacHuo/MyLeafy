@@ -14,7 +14,8 @@ struct LoginView: View {
     @State private var showingConnectionSettings = false
     @State private var loginConnectionMode: SchoolConnectionMode?
     private var schoolNetworkManager: SchoolNetworkManager {
-        SchoolTimetableConnection.shared.manager(mode: loginConnectionMode, portal: selectedPortal)
+        if selectedCampusID != .bjfu { return ActiveCampusContext.networkManager }
+        return SchoolTimetableConnection.shared.manager(mode: loginConnectionMode, portal: selectedPortal)
     }
     @StateObject private var networkPathObserver = LoginNetworkPathObserver()
     private let fieldHeight: CGFloat = 54
@@ -684,6 +685,8 @@ struct LoginView: View {
     @MainActor
     private func handleSelectedCampusChange() {
         cancelAuthenticationTasks()
+        SchoolTimetableConnection.shared.cancel()
+        loginConnectionMode = nil
         authenticationRequestID = UUID()
         captchaRequestID = UUID()
         schoolNetworkManager.cancelInFlightRequests()
@@ -817,7 +820,7 @@ struct LoginView: View {
             }
 
             if let failure = error as? AcademicConnectorFailure {
-                captchaLoadMessage = failure.localizedDescription
+                captchaLoadMessage = schoolNetworkManager.connectionFailureDescription(failure)
             } else if case SchoolNetworkError.loginUnavailable(let message) = error {
                 captchaLoadMessage = L10n.text(message, language: leafyLanguage)
             } else {
@@ -1006,7 +1009,7 @@ struct LoginView: View {
 
     private func loginErrorMessage(for error: Error) -> String {
         if error is SchoolNetworkError || error is CustomCampusAuthError || error is AcademicConnectorFailure {
-            return L10n.text(error.localizedDescription, language: leafyLanguage)
+            return L10n.text(schoolNetworkManager.connectionFailureDescription(error), language: leafyLanguage)
         }
 
         let nsError = error as NSError

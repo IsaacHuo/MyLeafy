@@ -87,6 +87,20 @@ nonisolated enum SchoolSessionCredentialStore {
         return connection == .campusDirect ? original : original + ":server-vpn"
     }
 
+    static func deleteAll() throws {
+        let status = SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service
+        ] as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw NSError(
+                domain: "leafy.school-session",
+                code: Int(status),
+                userInfo: [NSLocalizedDescriptionKey: "无法移除教务登录态，请重试。"]
+            )
+        }
+    }
+
     private static func baseQuery(account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
