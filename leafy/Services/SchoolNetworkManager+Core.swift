@@ -220,6 +220,7 @@ extension SchoolNetworkManager {
         let sessionCookies = persistedCookieValues
         let landingURLString = lastLandingURLString
         let portal = currentPortal
+        let previousScopeKey = ActiveCampusContext.identity?.scopeKey
 
         if !trimmedEduID.isEmpty {
             let identity = CampusIdentity(
@@ -239,9 +240,11 @@ extension SchoolNetworkManager {
             }
             if ActiveCampusContext.identity?.scopeKey != identity.scopeKey {
                 cancelInFlightRequests(preservingAcademicConnection: true)
+                if connectionMode == .serverVPN { Self.shared.cancelInFlightRequests() }
                 SchoolDataPrefetchCoordinator.shared.cancel()
             }
             CampusIdentityStore.activate(identity)
+            cookiePersistenceAllowed = true
 
             if !sessionCookies.isEmpty {
                 persistedCookieValues = sessionCookies
@@ -257,6 +260,16 @@ extension SchoolNetworkManager {
         if connectionMode == .serverVPN {
             // Publish the verified local identity without copying this transport's school session into direct access.
             Self.shared.currentPortal = currentPortal
+            if previousScopeKey != ActiveCampusContext.identity?.scopeKey {
+                Self.shared.session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
+                Self.shared.persistedCookieValues = SchoolSessionCredentialStore.load(
+                    identity: ActiveCampusContext.identity,
+                    portal: currentPortal
+                )
+                Self.shared.isLoggedIn = UserDefaults.standard.bool(forKey: CampusScopedDefaults.key("isLoggedIn"))
+                Self.shared.lastLandingURLString = UserDefaults.standard
+                    .string(forKey: CampusScopedDefaults.key("lastLandingURL"))
+            }
             Self.shared.authenticatedEduID = authenticatedEduID
             Self.shared.authenticatedDisplayName = authenticatedDisplayName
         }

@@ -12,6 +12,7 @@ extension SchoolNetworkManager {
         }
         let id = UUID()
         authenticationOperationID = id
+        if connectionMode == .serverVPN { cookiePersistenceAllowed = false }
         return id
     }
 
@@ -39,6 +40,7 @@ extension SchoolNetworkManager {
             throw SchoolNetworkError.featureUnavailable("演示模式不连接学校教务验证码。")
         }
 
+        let previousPersistenceAllowed = cookiePersistenceAllowed
         let operationID = try beginAuthenticationOperation()
         defer { finishAuthenticationOperation(operationID) }
         let scope = CampusOperationScope()
@@ -56,6 +58,7 @@ extension SchoolNetworkManager {
             // not mistaken for a real logout.
             try scope.check()
             guard authenticationOperationID == operationID else { throw CancellationError() }
+            cookiePersistenceAllowed = previousPersistenceAllowed
             persistedCookieValues = previousCookies
             for url in [URL(string: baseURL), URL(string: graduateBaseURL)].compactMap({ $0 }) {
                 syncPersistedCookiesToStorage(for: url)

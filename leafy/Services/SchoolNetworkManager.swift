@@ -67,6 +67,7 @@ final class SchoolNetworkManager: ObservableObject {
 
     var persistedCookieValues: [String: String] {
         didSet {
+            guard connectionMode != .serverVPN || cookiePersistenceAllowed else { return }
             _ = SchoolSessionCredentialStore.save(
                 persistedCookieValues,
                 identity: CampusIdentityStore.currentIdentity(),
@@ -123,6 +124,7 @@ final class SchoolNetworkManager: ObservableObject {
     var sessionGeneration: UInt64 = 0
     var session: URLSession = makeSession()
     var authenticationOperationID: UUID?
+    var cookiePersistenceAllowed = true
     var timetableFetchTask: Task<FetchedTimetableDocument, Error>?
     private let requestLoader: (@MainActor (URLRequest) async throws -> (Data, URLResponse))?
     let credentialSaver: @MainActor (String, String, CampusID, SchoolPortal) -> Bool

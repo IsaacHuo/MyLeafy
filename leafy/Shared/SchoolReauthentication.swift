@@ -124,6 +124,7 @@ struct SchoolReauthenticationContext: Equatable {
 
 struct SchoolReauthenticationRequest: Identifiable {
     let id = UUID()
+    let identityScopeKey = ActiveCampusContext.identity?.scopeKey
     let context: SchoolReauthenticationContext
     let allowsAutomaticAttempt: Bool
 
@@ -169,6 +170,7 @@ extension View {
 
 private struct SchoolManualReauthenticationPresentation: Identifiable {
     let id = UUID()
+    let identityScopeKey = ActiveCampusContext.identity?.scopeKey
     let context: SchoolReauthenticationContext
     let challenge: SchoolCaptchaChallenge?
     let initialMessage: String?
@@ -205,6 +207,8 @@ private struct SchoolReauthenticationModifier: ViewModifier {
                     onUseCampusDirect: {
                         networkManager.academicConnection?.cancel()
                         manualPresentation = nil
+                        guard presentation.identityScopeKey == ActiveCampusContext.identity?.scopeKey
+                        else { progressController.clear(); return }
                         onAuthenticated(SchoolReauthenticationCompletion(
                             context: presentation.context,
                             method: .manual,
@@ -213,6 +217,11 @@ private struct SchoolReauthenticationModifier: ViewModifier {
                     }
                 ) {
                     manualPresentation = nil
+                    guard presentation.identityScopeKey == ActiveCampusContext.identity?.scopeKey else {
+                        networkManager.academicConnection?.cancel()
+                        progressController.clear()
+                        return
+                    }
                     onAuthenticated(
                         SchoolReauthenticationCompletion(
                             context: presentation.context,
@@ -254,6 +263,11 @@ private struct SchoolReauthenticationModifier: ViewModifier {
 
             switch result {
             case .authenticated:
+                guard activeRequest.identityScopeKey == ActiveCampusContext.identity?.scopeKey else {
+                    networkManager.academicConnection?.cancel()
+                    progressController.clear()
+                    return
+                }
                 onAuthenticated(
                     SchoolReauthenticationCompletion(
                         context: activeRequest.context,

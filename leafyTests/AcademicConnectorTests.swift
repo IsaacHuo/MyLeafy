@@ -312,6 +312,46 @@ final class AcademicConnectorTests: XCTestCase {
         XCTAssertTrue(manager.isLoggedIn)
     }
 
+    func testVPNIdentitySwitchDoesNotCarryThePreviousStudentsDirectSession() throws {
+        let direct = ActiveCampusContext.networkManager
+        let previousIdentity = ActiveCampusContext.identity
+        let previousCookies = direct.persistedCookieValues
+        let previousPortal = direct.currentPortal
+        let previousLoggedIn = direct.isLoggedIn
+        let previousEduID = direct.authenticatedEduID
+        let previousName = direct.authenticatedDisplayName
+        let previousLanding = direct.lastLandingURLString
+        let a = owner("synthetic-direct-" + UUID().uuidString)
+        let b = owner("synthetic-vpn-" + UUID().uuidString)
+        defer {
+            direct.clearSession()
+            _ = SchoolSessionCredentialStore.delete(identity: a, portal: .undergraduate)
+            if let previousIdentity { CampusIdentityStore.activate(previousIdentity) }
+            direct.currentPortal = previousPortal
+            direct.persistedCookieValues = previousCookies
+            direct.isLoggedIn = previousLoggedIn
+            direct.authenticatedEduID = previousEduID
+            direct.authenticatedDisplayName = previousName
+            direct.lastLandingURLString = previousLanding
+        }
+        CampusIdentityStore.activate(a)
+        direct.currentPortal = .undergraduate
+        direct.persistAuthenticatedIdentity(eduID: a.eduID)
+        direct.persistedCookieValues = ["JSESSIONID": "synthetic-student-a"]
+        direct.isLoggedIn = true
+        let vpn = SchoolNetworkManager(connectionMode: .serverVPN)
+        vpn.cookiePersistenceAllowed = false
+        vpn.persistedCookieValues = ["JSESSIONID": "synthetic-student-b"]
+        XCTAssertTrue(SchoolSessionCredentialStore.load(identity: a, portal: .undergraduate, connection: .serverVPN)
+            .isEmpty)
+        vpn.persistAuthenticatedIdentity(eduID: b.eduID)
+        XCTAssertEqual(direct.authenticatedEduID, b.eduID)
+        XCTAssertEqual(direct.currentPortal, .undergraduate)
+        XCTAssertTrue(direct.persistedCookieValues.isEmpty)
+        XCTAssertFalse(direct.isLoggedIn)
+        XCTAssertEqual(vpn.persistedCookieValues["JSESSIONID"], "synthetic-student-b")
+    }
+
     private func owner(_ account: String) -> CampusIdentity {
         CampusIdentity(campusID: .bjfu, eduID: account, displayName: "合成学生", portal: .undergraduate)
     }
