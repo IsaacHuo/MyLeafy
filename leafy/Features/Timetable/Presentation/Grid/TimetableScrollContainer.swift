@@ -25,6 +25,8 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
     let header: Header
     let axis: Axis
     let gridBody: GridBody
+    let returnTransition: TimetableReturnTransition?
+    let returnContentReadyID: UUID?
     let onFirstInteractiveLayout: () -> Void
     let onTargetLayoutReady: (Int) -> Void
     let currentWeekProvider: () -> Int
@@ -46,6 +48,8 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         containerID: String,
         isRefreshEnabled: Bool = true,
         onRefresh: (@MainActor () async -> Void)? = nil,
+        returnTransition: TimetableReturnTransition? = nil,
+        returnContentReadyID: UUID? = nil,
         onFirstInteractiveLayout: @escaping () -> Void = {},
         onTargetLayoutReady: @escaping (Int) -> Void = { _ in },
         currentWeekProvider: @escaping () -> Int = { SemesterConfig.currentWeek() },
@@ -74,6 +78,8 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         self.header = header()
         self.axis = axis()
         self.gridBody = body()
+        self.returnTransition = returnTransition
+        self.returnContentReadyID = returnContentReadyID
         self.onFirstInteractiveLayout = onFirstInteractiveLayout
         self.onTargetLayoutReady = onTargetLayoutReady
         self.currentWeekProvider = currentWeekProvider
@@ -92,11 +98,15 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         context.coordinator.syncStateFromParent()
         context.coordinator.updateContent()
         context.coordinator.scheduleLayoutUpdate()
+        context.coordinator.animateReturnIfReady()
     }
 
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
         coordinator.isDismantled = true
         coordinator.cancelRefresh()
+        coordinator.cancelReturnAnimation()
+        coordinator.parent.returnTransition?.prepare = nil
+        coordinator.parent.returnTransition?.cancelPresentation = nil
         coordinator.bodyScrollView.delegate = nil
         coordinator.deferredScrollRetryScheduled = false
         coordinator.layoutUpdateScheduled = false
@@ -134,6 +144,10 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         private var pendingLayoutRealignmentWeek: Int?
         private var pendingLayoutRealignmentPasses = 0
         private var dragStartWeek = 1
+        private var returnSnapshots: [(container: UIView, snapshot: UIView)] = []
+        private var returnAnimator: UIViewPropertyAnimator?
+        private var returnDirection = 0
+        private var returnRequestID: UUID?
 
         init(_ parent: TimetableScrollContainer) {
             self.parent = parent
@@ -143,8 +157,13 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             axisHost = UIHostingController(rootView: parent.axis)
             bodyHost = UIHostingController(rootView: parent.gridBody)
             super.init()
+            parent.returnTransition?.prepare = { [weak self] direction in
+                self?.prepareReturnAnimation(direction: direction) ?? false
+            }
+            parent.returnTransition?.cancelPresentation = { [weak self] in self?.cancelReturnAnimation() }
             rootView.onBoundsChange = { [weak self] in
                 guard let self, !self.isDismantled else { return }
+                self.cancelReturnAnimation()
                 self.scheduleLayoutUpdate()
             }
         }
@@ -334,6 +353,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             rootView.bringSubviewToFront(headerScrollView)
             rootView.bringSubviewToFront(axisScrollView)
             rootView.bringSubviewToFront(cornerContainer)
+            for item in returnSnapshots { rootView.bringSubviewToFront(item.container) }
 
             return rootView
         }
@@ -348,6 +368,67 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 host.view.invalidateIntrinsicContentSize()
                 host.view.setNeedsLayout()
             }
+        }
+
+        private func prepareReturnAnimation(direction: Int) -> Bool {
+            guard !isDismantled, rootView.window != nil, hasStableContainerBounds,
+                  let requestID = parent.returnTransition?.requestID else { return false }
+            rootView.layoutIfNeeded()
+            var snapshots: [(UIView, UIView)] = []
+            for view in [headerScrollView, bodyScrollView] {
+                guard let snapshot = view.snapshotView(afterScreenUpdates: false) else { return false }
+                let overlay = UIView(frame: view.convert(view.bounds, to: rootView))
+                overlay.clipsToBounds = true
+                overlay.isUserInteractionEnabled = false
+                overlay.accessibilityElementsHidden = true
+                snapshot.frame = overlay.bounds
+                overlay.addSubview(snapshot)
+                snapshots.append((overlay, snapshot))
+            }
+            returnRequestID = requestID
+            returnDirection = direction
+            returnSnapshots = snapshots
+            for item in returnSnapshots { rootView.addSubview(item.container) }
+            return true
+        }
+
+        func animateReturnIfReady() {
+            guard returnAnimator == nil, let requestID = returnRequestID,
+                  parent.returnContentReadyID == requestID else { return }
+            // This parent update already contains the target window's value payloads.
+            rootView.layoutIfNeeded()
+            headerHost.view.layoutIfNeeded()
+            bodyHost.view.layoutIfNeeded()
+            let width = bodyScrollView.bounds.width
+            let entering = CGAffineTransform(translationX: CGFloat(returnDirection) * width, y: 0)
+            headerHost.view.transform = entering
+            bodyHost.view.transform = entering
+            let animator = UIViewPropertyAnimator(duration: TimetableReturnTransition.duration, curve: .easeOut) {
+                self.headerHost.view.transform = .identity
+                self.bodyHost.view.transform = .identity
+                for item in self.returnSnapshots {
+                    item.snapshot.transform = CGAffineTransform(
+                        translationX: -CGFloat(self.returnDirection) * width,
+                        y: 0
+                    )
+                }
+            }
+            returnAnimator = animator
+            animator.addCompletion { [weak self] _ in self?.cancelReturnAnimation() }
+            animator.startAnimation()
+        }
+
+        func cancelReturnAnimation() {
+            guard returnRequestID != nil else { return }
+            returnRequestID = nil
+            let animator = returnAnimator
+            returnAnimator = nil
+            animator?.stopAnimation(true)
+            headerHost.view.transform = .identity
+            bodyHost.view.transform = .identity
+            for item in returnSnapshots { item.container.removeFromSuperview() }
+            returnSnapshots = []
+            parent.returnTransition?.finish()
         }
 
         func scheduleLayoutUpdate() {
@@ -388,6 +469,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             rootView.bringSubviewToFront(headerScrollView)
             rootView.bringSubviewToFront(axisScrollView)
             rootView.bringSubviewToFront(cornerContainer)
+            for item in returnSnapshots { rootView.bringSubviewToFront(item.container) }
 
             if rootView.accessibilityIdentifier != parent.containerID {
                 rootView.accessibilityIdentifier = parent.containerID
@@ -474,6 +556,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             guard !isDismantled else { return }
             guard scrollView === bodyScrollView else { return }
+            cancelReturnAnimation()
             isAnimatingToTarget = false
             dragStartWeek = week(for: scrollView.contentOffset.x)
         }
@@ -754,6 +837,12 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
 }
 
 nonisolated enum TimetableScrollGeometry {
+    static func shouldRebaseViewport(from previous: CGSize, to next: CGSize) -> Bool {
+        guard previous.width > 0, previous.height > 0, next.width.isFinite, next.height.isFinite,
+              next.width > 0, next.height > 0 else { return false }
+        return abs(previous.width - next.width) > 0.5 || abs(previous.height - next.height) > 0.5
+    }
+
     static func rebasedVerticalOffset(_ offset: CGFloat, previousPitch: CGFloat, newPitch: CGFloat) -> CGFloat {
         guard offset.isFinite, previousPitch.isFinite, newPitch.isFinite,
               previousPitch > 0, newPitch > 0 else { return 0 }

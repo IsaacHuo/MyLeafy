@@ -1380,6 +1380,7 @@ struct CourseDetailSheet: View {
 
     let context: SelectedCourseContext
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.modelContext) private var modelContext
@@ -1418,10 +1419,60 @@ struct CourseDetailSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .leafyCardStyle()
 
-                    CourseDetailRow(title: "教室", value: course.locationText, icon: "mappin.and.ellipse")
-                    CourseDetailRow(title: "节次", value: course.durationTextWithTime, icon: "clock")
-                    teacherRow
-                    CourseDetailRow(title: "周次", value: course.weeksText, icon: "calendar")
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), alignment: .top),
+                                       count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: AppSpacing.compact
+                    ) {
+                        CourseDetailRow(
+                            title: "教室",
+                            value: course.locationText,
+                            icon: "mappin.and.ellipse",
+                            compact: true
+                        )
+                        CourseDetailRow(
+                            title: "节次",
+                            value: course.compactDurationTextWithTime,
+                            icon: "clock",
+                            compact: true
+                        )
+                        teacherRow
+                        CourseDetailRow(title: "周次", value: course.weeksText, icon: "calendar", compact: true)
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("课前提醒")
+                            .leafyHeadline()
+
+                        TimetableReminderOptionPicker(
+                            selectedOption: $selectedReminderOption,
+                            customMinutes: $customReminderMinutes
+                        )
+
+                        if selectedReminderOption != .none && reminderAnchorPeriods.count > 1 {
+                            Picker("提醒锚点", selection: reminderAnchorBinding) {
+                                ForEach(reminderAnchorPeriods, id: \.self) { period in
+                                    Text("第 \(period) 节开始前").tag(period)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        }
+
+                        Button {
+                            Task { await saveReminder() }
+                        } label: {
+                            Label("应用提醒", systemImage: "bell")
+                                .leafyBody()
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(AppTheme.accent(for: themeColorPreference))
+
+                        Text("提醒只保存在本机，会为这门课尚未开始的周次创建本地通知。")
+                            .microCaption()
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                    .padding(18)
+                    .leafyCardStyle()
 
                     VStack(alignment: .leading, spacing: 12) {
                         Text("课程备注")
@@ -1474,41 +1525,6 @@ struct CourseDetailSheet: View {
                     }
                     .padding(18)
                     .leafyCardStyle()
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("课前提醒")
-                            .leafyHeadline()
-
-                        TimetableReminderOptionPicker(
-                            selectedOption: $selectedReminderOption,
-                            customMinutes: $customReminderMinutes
-                        )
-
-                        if selectedReminderOption != .none && reminderAnchorPeriods.count > 1 {
-                            Picker("提醒锚点", selection: reminderAnchorBinding) {
-                                ForEach(reminderAnchorPeriods, id: \.self) { period in
-                                    Text("第 \(period) 节开始前").tag(period)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                        }
-
-                        Button {
-                            Task { await saveReminder() }
-                        } label: {
-                            Label("应用提醒", systemImage: "bell")
-                                .leafyBody()
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(AppTheme.accent(for: themeColorPreference))
-
-                        Text("提醒只保存在本机，会为这门课尚未开始的周次创建本地通知。")
-                            .microCaption()
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-                    .padding(18)
-                    .leafyCardStyle()
                 }
                 .padding(AppSpacing.page)
             }
@@ -1526,19 +1542,13 @@ struct CourseDetailSheet: View {
     private var teacherRow: some View {
         let teacherName = course.teacher.trimmingCharacters(in: .whitespacesAndNewlines)
         if teacherName.isEmpty {
-            CourseDetailRow(title: "教师", value: L10n.text("未填写"), icon: "person")
+            CourseDetailRow(title: "教师", value: L10n.text("未填写"), icon: "person", compact: true)
         } else {
             Button {
                 dismiss()
                 appNavigation.openTeacherRating(name: teacherName)
             } label: {
-                CourseDetailRow(title: "教师", value: teacherName, icon: "person")
-                    .overlay(alignment: .trailing) {
-                        Image(systemName: "chevron.right")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(AppTheme.tertiaryText)
-                            .padding(.trailing, 18)
-                    }
+                CourseDetailRow(title: "教师", value: teacherName, icon: "person", compact: true, showsDisclosure: true)
             }
             .buttonStyle(.plain)
             .accessibilityHint("打开这位教师的评价")
@@ -1795,27 +1805,40 @@ struct CourseOccurrenceProgressView: View {
 
 struct CourseDetailRow: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
-
     let title: String
     let value: String
     let icon: String
+    var compact = false
+    var showsDisclosure = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            LeafyIconBadge(systemName: icon)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.text(title, language: leafyLanguage))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-                Text(value)
-                    .leafyBody()
-                    .foregroundStyle(AppTheme.primaryText)
+        Group {
+            if compact {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label(L10n.text(title, language: leafyLanguage), systemImage: icon)
+                            .microCaption().foregroundStyle(AppTheme.secondaryText)
+                        Spacer(minLength: 0)
+                        if showsDisclosure {
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(AppTheme.tertiaryText)
+                        }
+                    }
+                    Text(value).leafyBody().foregroundStyle(AppTheme.primaryText)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(14)
+            } else {
+                HStack(alignment: .top, spacing: 14) {
+                    LeafyIconBadge(systemName: icon)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.text(title, language: leafyLanguage)).microCaption()
+                            .foregroundStyle(AppTheme.secondaryText)
+                        Text(value).leafyBody().foregroundStyle(AppTheme.primaryText)
+                    }
+                    Spacer()
+                }.padding(18)
             }
-
-            Spacer()
         }
-        .padding(18)
         .leafyCardStyle()
     }
 }
@@ -1865,6 +1888,21 @@ extension Course {
         guard let start = duration.min(), let end = duration.max() else { return L10n.text("未填写") }
         if start == end { return L10n.text("第 %d 节", start) }
         return L10n.text("第 %d-%d 节", start, end)
+    }
+
+    var compactDurationTextWithTime: String {
+        let periods = Array(Set(duration)).sorted()
+        var runs: [[Int]] = []
+        for period in periods {
+            if let last = runs.last?.last, period == last + 1 { runs[runs.count - 1].append(period) }
+            else { runs.append([period]) }
+        }
+        return runs.compactMap { run in
+            guard let first = run.first, let last = run.last,
+                  let start = TimetablePeriodSchedule.slot(for: first),
+                  let end = TimetablePeriodSchedule.slot(for: last) else { return nil }
+            return "\(first): \(start.startText)–\(end.endText)"
+        }.joined(separator: "\n")
     }
 
     var durationTextWithTime: String {

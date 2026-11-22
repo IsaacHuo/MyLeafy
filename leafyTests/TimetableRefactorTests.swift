@@ -54,6 +54,17 @@ final class TimetableTableParserTests: XCTestCase {
         }
     }
 
+    func testOverlappingRandomProcessArrangementsKeepBothRoomsAndOriginalWeeks() throws {
+        let content = course("随机过程B(必修)", weeks: "2,5-12(周)", teacher: "教师甲", room: "二教501")
+            + "<br>-------------<br>-------------<br>"
+            + course("随机过程B(必修)", weeks: "11-12(周)", teacher: "教师甲", room: "二教108")
+        let records = try HTMLParser.parseTimetableRecords(html: table(courses: [3: [2: content]]))
+        XCTAssertEqual(records.count, 2)
+        XCTAssertEqual(records.first { $0.room == "501" }?.weeks, [2] + Array(5 ... 12))
+        XCTAssertEqual(records.first { $0.room == "108" }?.weeks, [11, 12])
+        XCTAssertTrue(records.allSatisfy { $0.location == "二教" && $0.dayOfWeek == 2 && $0.duration == [6, 7] })
+    }
+
     func testOddEvenWeeksAndDifferentRoomsInOneCellRemainSeparate() throws {
         let content = course("同名课程", weeks: "1-8(单周)", room: "二教101")
             + "<hr>" + course("同名课程", weeks: "1-8(双周)", room: "二教202")

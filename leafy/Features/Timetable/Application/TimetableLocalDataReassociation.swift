@@ -3,11 +3,9 @@ import SwiftData
 
 enum TimetableLocalDataConflict: LocalizedError {
     case conflictingRecords(String)
-    case ambiguousArrangement(String)
     case ambiguousOccurrence(String, Int)
     var errorDescription: String? {
         switch self {
-        case .ambiguousArrangement(let name): return L10n.text("学校返回的“%@”在同一时段有不同班级或教室，无法确定排课，已保留当前课表。", name)
         case .conflictingRecords(let name): return L10n.text("“%@”存在不同的备注或提醒。请保留原记录并选择其他课程，或先编辑现有内容。", name)
         case .ambiguousOccurrence(let name, let week): return L10n.text("无法确定“%@”第 %d 周备注对应的课次，请手动关联。", name, week)
         }
@@ -60,7 +58,7 @@ struct TimetableLocalDataReassociation {
     }
     private func targets(for old: Course) -> [Course] {
         let exact = newCourses
-            .filter { $0.legacyStableCourseKey == old.legacyStableCourseKey && $0.classInfo == old.classInfo }
+            .filter { $0.stableCourseKey == old.stableCourseKey }
         if !exact.isEmpty && old.weeks
             .allSatisfy({ week in exact.contains { $0.weeks.contains(week) } }) { return exact }
         let candidates = newCourses.filter {

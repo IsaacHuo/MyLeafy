@@ -134,14 +134,6 @@ struct TimetableRefreshUseCase {
             TimetableNotificationManager.courseReminderIdentifiers(for: $0)
         }))
         let newCourses = records.map { $0.makeCourse(semesterID: semesterID) }
-        for group in Dictionary(grouping: newCourses, by: \.stableCourseKey).values {
-            for (index, course) in group.enumerated() {
-                if group.dropFirst(index + 1).contains(where: {
-                    !Set($0.weeks).isDisjoint(with: course.weeks)
-                        && ($0.room != course.room || $0.classInfo != course.classInfo)
-                }) { throw TimetableLocalDataConflict.ambiguousArrangement(course.courseName) }
-            }
-        }
         let associations = try TimetableLocalDataReassociation(
             oldCourses: oldCourses,
             newCourses: newCourses,
@@ -149,6 +141,9 @@ struct TimetableRefreshUseCase {
         )
         let undoPersonalData = try TimetableLocalDataReassociation.personalDataUndo(in: modelContext)
         do {
+            try TimetableArrangementIdentityMigration.apply(
+                courses: oldCourses.isEmpty ? newCourses : oldCourses, context: modelContext
+            )
             try associations.apply(to: modelContext)
             let reminderPlan = try TimetableReminderRefreshPlan(
                 oldIdentifiers: oldIdentifiers, courses: newCourses,

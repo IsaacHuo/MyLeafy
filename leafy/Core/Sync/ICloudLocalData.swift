@@ -395,20 +395,28 @@ enum ICloudLocalData {
 
     @discardableResult
     static func markUnlinkedEdits(in context: ModelContext) throws -> Bool {
-        let courses = try context.fetch(FetchDescriptor<Course>())
-        let keys = Set(courses.map(\.stableCourseKey))
-        for note in try context.fetch(FetchDescriptor<CourseNote>())
-            where !note.isUnassociated && !keys.contains(note.courseKey) { note.isUnassociated = true }
-        for note in try context.fetch(FetchDescriptor<CourseOccurrenceNote>()) {
-            if !note.isUnassociated && !courses
-                .contains(where: { $0.stableCourseKey == note.courseKey && $0.weeks.contains(note.week) }) {
-                note.isUnassociated = true }
+        let undo = try TimetableLocalDataReassociation.personalDataUndo(in: context)
+        do {
+            let courses = try context.fetch(FetchDescriptor<Course>())
+            try TimetableArrangementIdentityMigration.apply(courses: courses, context: context)
+            let keys = Set(courses.map(\.stableCourseKey))
+            for note in try context.fetch(FetchDescriptor<CourseNote>())
+                where !note.isUnassociated && !keys.contains(note.courseKey) { note.isUnassociated = true }
+            for note in try context.fetch(FetchDescriptor<CourseOccurrenceNote>()) {
+                if !note.isUnassociated && !courses
+                    .contains(where: { $0.stableCourseKey == note.courseKey && $0.weeks.contains(note.week) }) {
+                    note.isUnassociated = true }
+            }
+            for setting in try context.fetch(FetchDescriptor<CourseReminderSetting>())
+                where !setting.isUnassociated && !keys.contains(setting.courseKey) { setting.isUnassociated = true }
+            let changed = context.hasChanges
+            if changed { try context.save() }
+            return changed
+        } catch {
+            undo()
+            context.processPendingChanges()
+            throw error
         }
-        for setting in try context.fetch(FetchDescriptor<CourseReminderSetting>())
-            where !setting.isUnassociated && !keys.contains(setting.courseKey) { setting.isUnassociated = true }
-        let changed = context.hasChanges
-        if changed { try context.save() }
-        return changed
     }
 
     static func conflictCopy(_ value: ICloudSyncValue, context: ModelContext) throws -> ICloudSyncValue? {

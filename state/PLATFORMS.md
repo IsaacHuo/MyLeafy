@@ -1,5 +1,11 @@
 # 双端功能、验证与交付状态
 
+## iOS 图片保存与课表追加纠错（2026-11-22，待验收）
+
+独立分支 [#88](https://github.com/IsaacHuo/MyLeafy/issues/88) / [草稿 PR #87](https://github.com/IsaacHuo/MyLeafy/pull/87) 增加社区原文件保存、重叠教室排课及已发行关联键迁移；详情 2×2、时间设置顺序、启动横滑与 0.14 秒回到动画同步调整。iCloud 记录字段、SwiftData schema、Widget archive 和共享协议形状未改变。Android、VPN 和服务端本轮未修改，不将 iOS 证据扩大到其他端。
+
+任务 SwiftFormat/diff、plist 和本地化检查通过；Xcode 27.1、arm64/iOS 17 无签名 `build-for-testing` 通过（App、Widget、分享扩展、测试目标），最终增量日志无警告/错误。新增 17 项定向回归只编译，未执行 XCTest 或启动 Simulator。照片权限、保存结果、特殊排课、迁移/iCloud、滑动和系统日历仍待所有者真机验收，不合并、不发布。
+
 ## iOS 日历导出纠错（2026-11-22，待验收）
 
 独立任务分支 [#86](https://github.com/IsaacHuo/MyLeafy/issues/86) 新增课表导出类别与可写目标日历选择；重复导出按所选范围更新、迁移及去重，旧版无 scope 事件确认后接管。课表和个人日程导出清除提醒/定位，TXT 与 App 内提醒不变。Android 仍为 ICS 导出，属于平台特有交互，本轮不改共享契约。

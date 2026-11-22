@@ -866,6 +866,9 @@ struct CommunityRemoteImagePreview: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @State private var selectedIndex = 0
+    @State private var isSavingImage = false
+    @State private var saveTask: Task<Void, Never>?
+    @State private var operationAlert: LeafyOperationAlert?
 
     var body: some View {
         NavigationStack {
@@ -877,6 +880,12 @@ struct CommunityRemoteImagePreview: View {
                     ForEach(Array(images.enumerated()), id: \.element.id) { index, image in
                         if let fullURL = image.resolvedFullURL {
                             ZoomableRemotePreviewImage(url: fullURL)
+                                .contextMenu {
+                                    Button { saveImage(at: index) } label: {
+                                        Label("保存图片", systemImage: "square.and.arrow.down")
+                                    }
+                                    .disabled(isSavingImage)
+                                }
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 32)
                                 .tag(index)
@@ -905,7 +914,19 @@ struct CommunityRemoteImagePreview: View {
             .onAppear {
                 selectedIndex = min(max(initialIndex, 0), max(images.count - 1, 0))
             }
+            .onDisappear { saveTask?.cancel() }
+            .leafyOperationAlert($operationAlert)
             .toolbar {
+                ToolbarItem(placement: .leafyTrailing) {
+                    Button { saveImage(at: selectedIndex) } label: {
+                        if isSavingImage { ProgressView() }
+                        else { Label("保存图片", systemImage: "square.and.arrow.down") }
+                    }
+                    .disabled(isSavingImage || !images.indices.contains(selectedIndex)
+                        ||
+                        (images.indices.contains(selectedIndex) ? images[selectedIndex]
+                            .resolvedFullURL == nil : true))
+                }
                 ToolbarItem(placement: .leafyLeading) {
                     Button("关闭") {
                         dismiss()
@@ -914,6 +935,20 @@ struct CommunityRemoteImagePreview: View {
                 }
             }
             .leafyNavigationToolbarBackgroundHidden()
+        }
+    }
+    private func saveImage(at index: Int) {
+        guard !isSavingImage, images.indices.contains(index), let url = images[index].resolvedFullURL else { return }
+        isSavingImage = true
+        saveTask = Task { @MainActor in
+            defer { isSavingImage = false; saveTask = nil }
+            do {
+                try await CommunityImageSaver.save(url: url)
+                try Task.checkCancellation()
+                operationAlert = .success(L10n.text("图片已保存到相册。"))
+            } catch {
+                if !Task.isCancelled { operationAlert = .failure(error.localizedDescription) }
+            }
         }
     }
 }

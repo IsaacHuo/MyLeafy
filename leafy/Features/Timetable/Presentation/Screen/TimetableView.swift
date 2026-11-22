@@ -85,6 +85,12 @@ struct TimetableView: View {
     @State private var lastSyncAt = TimetableCacheMetadata.lastSyncAt
     @State private var lastFailureMessage = TimetableCacheMetadata.lastFailureMessage
     @State private var isTimetableInteractivelyLaidOut = false
+    @State private var updateBuffer = TimetableUpdateBuffer()
+    @State private var pendingUpdateID: UUID?
+    @State private var pendingUpdateTask: Task<Void, Never>?
+    @State private var pendingMigratedReminders: TimetableReminderRefreshPlan?
+    @State private var renderedSettings = UserTimetableSettingsStore.load()
+    @State private var returnTransition = TimetableReturnTransition()
     @State private var hasInitializedTimetable = false
     @State private var hasPerformedInitialAppearance = false
     @State private var hasRunDeferredInitialWork = false
@@ -387,12 +393,22 @@ struct TimetableView: View {
                     refreshContinuousDayPayloads()
                 }
                 syncReturnButtonVisibility(for: currentWeek)
+                schedulePendingTimetableUpdates()
+            }
+            .onChange(of: returnTransition.isActive) { _, active in
+                if !active { schedulePendingTimetableUpdates() }
             }
             .onChange(of: isTimetablePagingDragActive) { _, isActive in
-                if !isActive { continuousViewport.cancelPaging(reducesMotion: accessibilityReduceMotion) }
+                if !isActive {
+                    continuousViewport.cancelPaging(reducesMotion: accessibilityReduceMotion)
+                    schedulePendingTimetableUpdates()
+                }
             }
             .onChange(of: isTimetableMagnificationActive) { _, isActive in
-                if !isActive { continuousViewport.cancelMagnification() }
+                if !isActive {
+                    continuousViewport.cancelMagnification()
+                    schedulePendingTimetableUpdates()
+                }
             }
             .onChange(of: timetableHidesWeekends) { _, _ in
                 handleWeekendVisibilityChange()
@@ -597,13 +613,20 @@ struct TimetableView: View {
                 modelContext: modelContext
             )
             try TimetableSingleContainerMigration.run(context: modelContext)
+            pendingMigratedReminders = try TimetableArrangementIdentityMigration.run(context: modelContext)
+            if pendingMigratedReminders != nil { requestTimetableUpdates([.reports]) }
         } catch {
             Self.dataLogger
                 .error("Failed to migrate historical timetable data: \(error.localizedDescription, privacy: .public)")
+            lastFailureMessage = L10n.text("课程关联修复失败，已保留原记录，请重试。")
+            TimetableCacheMetadata.lastFailureMessage = lastFailureMessage
+            alertMessage = lastFailureMessage ?? ""
+            showAlert = true
         }
         syncAcademicYearDataProjections()
-        syncTimetableScheduleProjectionSnapshot()
-        syncTimetableGridSnapshot()
+        syncTimetableScheduleProjectionSnapshot(refreshPayloads: false)
+        syncTimetableGridSnapshot(refreshPayloads: false)
+        refreshContinuousDayPayloads()
         syncReturnButtonVisibility()
 
         let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable()
@@ -619,31 +642,77 @@ struct TimetableView: View {
         }
         hasPerformedInitialAppearance = true
         reloadTimetableBackground()
-        refreshContinuousDayPayloads()
         syncReturnButtonVisibility()
+    }
+
+    private var canUpdateTimetableVisuals: Bool {
+        !continuousViewport.isInteractionActive && !returnTransition.isActive
+            && !isTimetablePagingDragActive && !isTimetableMagnificationActive
+    }
+
+    private func requestTimetableUpdates(_ updates: TimetablePendingUpdates) {
+        updateBuffer.request(updates)
+        schedulePendingTimetableUpdates()
+    }
+
+    private func schedulePendingTimetableUpdates() {
+        guard pendingUpdateTask == nil, !updateBuffer.pending.isEmpty else { return }
+        let scope = CampusOperationScope()
+        let id = UUID()
+        pendingUpdateID = id
+        pendingUpdateTask = Task { @MainActor in
+            await Task.yield()
+            guard pendingUpdateID == id else { return }
+            pendingUpdateID = nil
+            pendingUpdateTask = nil
+            guard scope.isCurrent, !Task.isCancelled, scenePhase == .active else { return }
+            let work = updateBuffer.takeReady(isInteracting: !canUpdateTimetableVisuals,
+                                              hasInteractiveLayout: isTimetableInteractivelyLaidOut)
+            if work.contains(.timeline) {
+                rebuildAcademicYearTimeline(referenceDate: Date(), positionsToReferenceDate: false)
+            } else {
+                if work.contains(.data) {
+                    syncAcademicYearDataProjections()
+                    syncTimetableGridSnapshot(refreshPayloads: false)
+                }
+                if work.contains(.schedule) { syncTimetableScheduleProjectionSnapshot(refreshPayloads: false) }
+                if !work.intersection([.data, .schedule]).isEmpty { refreshContinuousDayPayloads() }
+            }
+            if work.contains(.widget) { performWidgetSnapshotPublication() }
+            if work.contains(.reports) {
+                let reminderPlan = pendingMigratedReminders
+                pendingMigratedReminders = nil
+                Task { @MainActor in
+                    if let warning = await reminderPlan?.restore(), scope.isCurrent {
+                        TimetableCacheMetadata.lastFailureMessage = warning
+                        lastFailureMessage = warning
+                    }
+                    guard scope.isCurrent else { return }
+                    try? await ScheduleReportNotificationManager.refreshIfEnabled(modelContext: modelContext)
+                }
+            }
+        }
     }
 
     private func handleFirstInteractiveLayout() {
         isTimetableInteractivelyLaidOut = true
         guard !hasRunDeferredInitialWork else { return }
         hasRunDeferredInitialWork = true
-        let scope = CampusOperationScope()
-        Task { @MainActor in
-            await Task.yield()
-            guard scope.isCurrent, !Task.isCancelled else { return }
-            publishWidgetSnapshot()
-            refreshScheduleReportNotifications()
-        }
+        requestTimetableUpdates([.widget, .reports])
     }
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
-        guard newPhase == .active else { return }
-        reloadExamArrangements()
-        if !isWeatherAdvicePresented {
-            Task { await refreshTimetableWeatherPreview() }
+        guard newPhase == .active else {
+            returnTransition.cancel()
+            pendingUpdateTask?.cancel()
+            pendingUpdateTask = nil
+            pendingUpdateID = nil
+            return
         }
+        reloadExamArrangements()
+        if !isWeatherAdvicePresented { Task { await refreshTimetableWeatherPreview() } }
         syncReturnButtonVisibility()
-        publishWidgetSnapshot()
+        requestTimetableUpdates([.widget])
     }
 
     private func handleCurrentWeekChange(_ newValue: Int) {
@@ -668,11 +737,12 @@ struct TimetableView: View {
             currentWeek = page
         }
         refreshContinuousDayPayloads(forNewWindow: true)
+        returnTransition.contentReady()
         syncReturnButtonVisibility(for: currentWeek)
     }
 
     private func refreshContinuousDayPayloads(forNewWindow: Bool = false) {
-        guard forNewWindow || continuousViewport.phase == .idle else {
+        guard forNewWindow || canUpdateTimetableVisuals else {
             hasDeferredContinuousPayloadRefresh = true
             return
         }
@@ -712,47 +782,21 @@ struct TimetableView: View {
         hasDeferredContinuousPayloadRefresh = false
     }
 
-    private func handleWeekendVisibilityChange() {
-        syncTimetableGridSnapshot()
-    }
+    private func handleWeekendVisibilityChange() { requestTimetableUpdates([.data]) }
 
     private func handleCoursesCountChange() {
-        syncAcademicYearDataProjections()
-        syncTimetableGridSnapshot()
-        if courses.isEmpty {
-            isTimetableInteractivelyLaidOut = false
-        }
         syncReturnButtonVisibility()
-        publishWidgetSnapshot()
-        refreshScheduleReportNotifications()
+        requestTimetableUpdates([.data, .widget, .reports])
     }
 
-    private func handleCourseNotesCountChange() {
-        syncTimetableGridSnapshot()
-        publishWidgetSnapshot()
-    }
-
-    private func handleCourseReminderSettingsCountChange() {
-        publishWidgetSnapshot()
-    }
-
-    private func handleCellRemindersCountChange() {
-        syncAcademicYearDataProjections()
-        syncTimetableGridSnapshot()
-        publishWidgetSnapshot()
-        refreshScheduleReportNotifications()
-    }
-
-    private func handleTimetableGridInputChange() {
-        syncAcademicYearDataProjections()
-        syncTimetableGridSnapshot()
-    }
+    private func handleCourseNotesCountChange() { requestTimetableUpdates([.data, .widget]) }
+    private func handleCourseReminderSettingsCountChange() { requestTimetableUpdates([.widget]) }
+    private func handleCellRemindersCountChange() { requestTimetableUpdates([.data, .widget, .reports]) }
+    private func handleTimetableGridInputChange() { requestTimetableUpdates([.data]) }
 
     private func handleNationalCalendarRuntimeConfigChange() {
         calendarEventSignature = AcademicCalendarEvents.displayEvents()
-        syncTimetableScheduleProjectionSnapshot()
-        publishWidgetSnapshot()
-        refreshScheduleReportNotifications()
+        requestTimetableUpdates([.schedule, .widget, .reports])
     }
 
     private func handleSchoolDataRefresh(_ notification: Notification) {
@@ -821,19 +865,14 @@ struct TimetableView: View {
         }
     }
 
-    private func refreshScheduleReportNotifications() {
-        let scope = CampusOperationScope()
-        Task { @MainActor in
-            guard scope.isCurrent, !Task.isCancelled else { return }
-            try? await ScheduleReportNotificationManager.refreshIfEnabled(modelContext: modelContext)
-        }
-    }
+    private func refreshScheduleReportNotifications() { requestTimetableUpdates([.reports]) }
 
     @MainActor
     private func applySemesterRuntimeConfig(_ config: SemesterRuntimeConfig) {
-        _ = config
-        rebuildAcademicYearTimeline(referenceDate: Date(), positionsToReferenceDate: false)
-        publishWidgetSnapshot()
+        // School runtime metadata must not reposition the user's local 20-week container.
+        guard renderedSettings != UserTimetableSettingsStore.load()
+            || academicYearConfigurations != [SemesterConfig.current] else { return }
+        requestTimetableUpdates([.timeline, .widget])
     }
 
     @MainActor
@@ -841,6 +880,11 @@ struct TimetableView: View {
         referenceDate: Date,
         positionsToReferenceDate: Bool
     ) {
+        guard canUpdateTimetableVisuals else { requestTimetableUpdates([.timeline]); return }
+        let previousCenterDate = continuousViewport.centerDate
+        let settings = UserTimetableSettingsStore.load()
+        let dateConfigurationChanged = settings.firstMonday != renderedSettings.firstMonday
+        renderedSettings = settings
         academicYearConfigurations = [SemesterConfig.current]
         academicYearTimetable = Self.makeAcademicYearTimetable(
             configurations: academicYearConfigurations,
@@ -853,10 +897,10 @@ struct TimetableView: View {
         )
         calendarEventSignature = AcademicCalendarEvents.displayEvents()
         syncAcademicYearDataProjections()
-        syncTimetableScheduleProjectionSnapshot()
+        syncTimetableScheduleProjectionSnapshot(refreshPayloads: false)
         timetableGridSnapshotCache.invalidate()
         timetableGridSnapshot = nil
-        syncTimetableGridSnapshot()
+        syncTimetableGridSnapshot(refreshPayloads: false)
 
         let referencePage = academicYearTimetable.pageIndex(containing: referenceDate) ?? SemesterConfig
             .currentWeek(date: referenceDate)
@@ -872,7 +916,8 @@ struct TimetableView: View {
             rangeStart: academicYearTimetable.startDate,
             rangeEnd: academicEnd
         )
-        if let weekStart = academicYearTimetable.week(atPageIndex: currentWeek)?.weekStartDate {
+        if positionsToReferenceDate || dateConfigurationChanged,
+           let weekStart = academicYearTimetable.week(atPageIndex: currentWeek)?.weekStartDate {
             continuousViewport.positionOnWeek(
                 weekStart,
                 centersToday: referencePage == currentAcademicYearPage
@@ -883,11 +928,15 @@ struct TimetableView: View {
             academicYear: academicYearTimetable,
             calendar: calendar
         )
+        if !positionsToReferenceDate && !dateConfigurationChanged,
+           let page = academicYearTimetable.pageIndex(containing: previousCenterDate) { currentWeek = page }
+        refreshContinuousDayPayloads()
         syncReturnButtonVisibility(for: currentWeek)
     }
 
     @MainActor
     private func syncAcademicYearDataProjections() {
+        guard canUpdateTimetableVisuals else { requestTimetableUpdates([.data]); return }
         var courseProjections: [UUID: TimetableCourseWeekProjection] = [:]
         for course in courses {
             guard let config = academicYearTimetable.configuration(semesterID: course.sourceSemesterID) else {
@@ -1271,14 +1320,17 @@ struct TimetableView: View {
     }
 
     private func returnToCurrentWeek() {
+        guard !returnTransition.isActive else { return }
         if !academicYearTimetable.contains(Date()) {
             rebuildAcademicYearTimeline(referenceDate: Date(), positionsToReferenceDate: true)
-            return
         }
-        let week = currentAcademicYearPage
-        continuousViewport.returnToToday()
-        currentWeek = week
-        isAwayFromCurrentSchedule = false
+        let target = UserTimetableSettings.calendar.startOfDay(for: Date())
+        let direction = target == continuousViewport.centerDate ? 0 : (target > continuousViewport.centerDate ? 1 : -1)
+        returnTransition.perform(direction: direction, reducesMotion: accessibilityReduceMotion) {
+            continuousViewport.returnToToday()
+            currentWeek = currentAcademicYearPage
+            isAwayFromCurrentSchedule = false
+        }
     }
 
     private var returnButtonTransition: AnyTransition {
@@ -1320,13 +1372,17 @@ struct TimetableView: View {
                     .onAppear { timetableViewportSize = geometry.size }
                     .onChange(of: geometry.size) { _, size in
                         guard size.width > 0, size.height > 0 else { return }
-                        continuousViewport.resizeViewport()
+                        if TimetableScrollGeometry.shouldRebaseViewport(from: timetableViewportSize, to: size) {
+                            returnTransition.cancel()
+                            continuousViewport.resizeViewport()
+                        }
                         timetableViewportSize = size
                     }
+                    .simultaneousGesture(timetableMagnificationGesture)
+                    .simultaneousGesture(timetableHorizontalPagingGesture(viewportWidth: metrics
+                            .containerWidth - axisWidth - AppSpacing.micro))
             }
         }
-        .simultaneousGesture(timetableMagnificationGesture)
-        .simultaneousGesture(timetableHorizontalPagingGesture)
         .accessibilityValue(displayMode == .threeDay ? "三日放大视图" : "一周课表视图")
         .accessibilityActions {
             if !isCustomCampus {
@@ -1358,6 +1414,7 @@ struct TimetableView: View {
         MagnifyGesture(minimumScaleDelta: 0.04)
             .updating($isTimetableMagnificationActive) { _, isActive, _ in isActive = true }
             .onChanged { value in
+                returnTransition.cancel()
                 if continuousViewport.phase != .pinching {
                     continuousViewport.beginMagnification(
                         centersToday: currentWeek == currentAcademicYearPage
@@ -1378,18 +1435,19 @@ struct TimetableView: View {
             }
     }
 
-    private var timetableHorizontalPagingGesture: some Gesture {
+    private func timetableHorizontalPagingGesture(viewportWidth: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .updating($isTimetablePagingDragActive) { _, isActive, _ in isActive = true }
             .onChanged { value in
                 if continuousViewport.phase != .paging {
                     guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                    returnTransition.cancel()
                 }
                 var transaction = Transaction(animation: nil)
                 transaction.isContinuous = true
                 withTransaction(transaction) {
                     if continuousViewport.phase != .paging {
-                        guard continuousViewport.beginPaging(viewportWidth: continuousContentViewportWidth)
+                        guard continuousViewport.beginPaging(viewportWidth: viewportWidth)
                         else { return }
                     }
                     continuousViewport.updatePaging(translation: value.translation.width)
@@ -1403,20 +1461,10 @@ struct TimetableView: View {
                 continuousViewport.endPaging(
                     predictedTranslation: value.predictedEndTranslation.width,
                     velocity: estimatedVelocity,
-                    viewportWidth: continuousContentViewportWidth,
+                    viewportWidth: viewportWidth,
                     reducesMotion: accessibilityReduceMotion
                 )
             }
-    }
-
-    private var continuousContentViewportWidth: CGFloat {
-        max(
-            timetableViewportSize.width
-                - timetableHorizontalPadding * 2
-                - axisWidth
-                - AppSpacing.micro,
-            1
-        )
     }
 
     private func continuousTimetable(
@@ -1446,6 +1494,8 @@ struct TimetableView: View {
             containerID: "continuous-zoom-timetable",
             isRefreshEnabled: canRefreshTimetable,
             onRefresh: isCustomCampus ? nil : { await refreshTimetableFromGesture() },
+            returnTransition: returnTransition,
+            returnContentReadyID: returnTransition.readyID,
             onFirstInteractiveLayout: handleFirstInteractiveLayout,
             currentWeekProvider: { 1 },
             corner: {
@@ -2121,7 +2171,8 @@ struct TimetableView: View {
         )
     }
 
-    private func syncTimetableGridSnapshot() {
+    private func syncTimetableGridSnapshot(refreshPayloads: Bool = true) {
+        guard canUpdateTimetableVisuals else { requestTimetableUpdates([.data]); return }
         let snapshot = timetableGridSnapshotCache.snapshot(
             input: timetableRenderInput,
             totalWeeks: totalWeeks
@@ -2130,7 +2181,7 @@ struct TimetableView: View {
             timetableGridSnapshot?.totalWeeks != snapshot.totalWeeks
         else { return }
         timetableGridSnapshot = snapshot
-        refreshContinuousDayPayloads()
+        if refreshPayloads { refreshContinuousDayPayloads() }
     }
 
     private func handleStaleTimetableSnapshot() {
@@ -2144,13 +2195,14 @@ struct TimetableView: View {
         }
     }
 
-    private func syncTimetableScheduleProjectionSnapshot() {
+    private func syncTimetableScheduleProjectionSnapshot(refreshPayloads: Bool = true) {
+        guard canUpdateTimetableVisuals else { requestTimetableUpdates([.schedule]); return }
         timetableScheduleProjectionSnapshot = TimetableScheduleProjectionSnapshot.make(
             countdownEvents: customScheduleEvents,
             exams: cachedExamArrangements,
             academicYear: academicYearTimetable
         )
-        refreshContinuousDayPayloads()
+        if refreshPayloads { refreshContinuousDayPayloads() }
     }
 
     private func persistParserDebugHTML(_ html: String) -> String {
@@ -2161,7 +2213,7 @@ struct TimetableView: View {
 
     private var canRefreshTimetable: Bool {
         !isCustomCampus && !isFetching && !progressController.isActive
-            && reauthenticationRequest == nil && !continuousViewport.isInteractionActive
+            && reauthenticationRequest == nil && !continuousViewport.isInteractionActive && !returnTransition.isActive
     }
 
     @MainActor
@@ -2385,7 +2437,9 @@ struct TimetableView: View {
         )
     }
 
-    private func publishWidgetSnapshot() {
+    private func publishWidgetSnapshot() { requestTimetableUpdates([.widget]) }
+
+    private func performWidgetSnapshotPublication() {
         LeafyWidgetSnapshotBuilder.publish(
             from: modelContext,
             isAuthenticated: networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
@@ -2460,10 +2514,10 @@ private struct TimetableWeekPickerPanel: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
-                    TimetableConfigurationLink()
                     ForEach(visibleAcademicYears) { academicYear in
                         primaryAcademicYearSection(academicYear)
                     }
+                    TimetableConfigurationLink()
 
                     if let message = model.unavailableFutureConfigurationMessage {
                         Label(message, systemImage: "calendar.badge.exclamationmark")

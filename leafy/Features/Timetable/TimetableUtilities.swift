@@ -261,10 +261,11 @@ enum TimetableLocalDataSemesterMigration {
             return { reminder.startsAt = dates.0; reminder.endsAt = dates.1 }
         }
         let legacyCourses = courses.filter { $0.sourceSemesterID == legacySemesterID }
-        let scopedKeyByLegacyKey = Dictionary(
-            legacyCourses.map { ($0.legacyStableCourseKey, $0.stableCourseKey) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        let scopedKeyByLegacyKey = Dictionary(grouping: legacyCourses, by: \.legacyStableCourseKey)
+            .compactMapValues { courses -> String? in
+                let keys = Set(courses.map(\.stableCourseKey))
+                return keys.count == 1 ? keys.first : nil
+            }
 
         for note in courseNotes {
             if let scopedKey = scopedKeyByLegacyKey[note.courseKey] {
@@ -754,8 +755,9 @@ enum TimetableNotificationManager {
 
     static func courseReminderIdentifiers(for course: Course) -> [String] {
         course.weeks.flatMap { week in
-            [notificationID(courseKey: course.stableCourseKey, week: week),
-             previousCourseNotificationID(courseKey: course.stableCourseKey, week: week)]
+            [course.stableCourseKey, course.previousStableCourseKey, course.legacyStableCourseKey].flatMap { key in
+                [notificationID(courseKey: key, week: week), previousCourseNotificationID(courseKey: key, week: week)]
+            }
         }
     }
 

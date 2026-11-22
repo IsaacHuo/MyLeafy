@@ -1,6 +1,56 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "保存图片" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save image"
+          }
+        }
+      }
+    },
+    "图片下载失败，请稍后重试。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to download the image. Please try again later."
+          }
+        }
+      }
+    },
+    "图片文件无法读取，请重试。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to read the image file. Please try again."
+          }
+        }
+      }
+    },
+    "图片已保存到相册。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image saved to Photos."
+          }
+        }
+      }
+    },
+    "课程关联修复失败，已保留原记录，请重试。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to update course associations. Your original records have been kept. Please try again."
+          }
+        }
+      }
+    },
     "导出内容" : {
       "localizations" : {
         "en-US" : {
