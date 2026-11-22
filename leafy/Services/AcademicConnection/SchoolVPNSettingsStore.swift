@@ -78,6 +78,7 @@ final class SchoolVPNSettingsStore: ObservableObject {
     static let shared = SchoolVPNSettingsStore()
 
     @Published private(set) var revision: UInt64 = 0
+    @Published var storageWarning: String?
     private let defaults: UserDefaults
     private let vault: any SchoolVPNVault
     private var transient: [String: SchoolVPNCredential] = [:]
@@ -129,6 +130,7 @@ final class SchoolVPNSettingsStore: ObservableObject {
             pendingLogin = (normalized, remember)
         }
         revision &+= 1
+        storageWarning = nil
     }
 
     func bindPendingLogin(to identity: CampusIdentity) throws {
@@ -139,6 +141,7 @@ final class SchoolVPNSettingsStore: ObservableObject {
         if pendingLogin.remember { try vault.save(pendingLogin.credential, owner: identity.scopeKey) }
         else { transient[identity.scopeKey] = pendingLogin.credential }
         self.pendingLogin = nil
+        storageWarning = nil
         // Binding an authenticated owner is not a new configuration and must not cancel that login.
         objectWillChange.send()
     }

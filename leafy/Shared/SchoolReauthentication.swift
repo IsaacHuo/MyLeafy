@@ -442,9 +442,13 @@ private struct SchoolReauthenticationSheet: View {
             Text(L10n.text(presentation.context.message, language: leafyLanguage))
                 .leafyBody()
                 .foregroundStyle(AppTheme.secondaryText)
-            Text(L10n.text(presentation.context.portal.loginHint, language: leafyLanguage))
-                .microCaption()
-                .foregroundStyle(AppTheme.tertiaryText)
+            Text(L10n.text(
+                networkManager.connectionMode == .serverVPN ? "通过北林 VPN 连接教务，无需另开 VPN App。" : presentation.context
+                    .portal.loginHint,
+                language: leafyLanguage
+            ))
+            .microCaption()
+            .foregroundStyle(AppTheme.tertiaryText)
         }
     }
 

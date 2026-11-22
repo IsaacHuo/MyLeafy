@@ -1960,7 +1960,8 @@ private struct CacheAndSyncView: View {
                     } label: {
                         LabeledContent("教务连接", value: usesVPN ? "北林 VPN 同步" : "校园网直连")
                     }
-                    .disabled(isSyncing || isClearing)
+                    if let warning = vpnSettings.storageWarning { Text(warning).foregroundStyle(AppTheme.danger) }
+                        .disabled(isSyncing || isClearing)
                 } footer: {
                     Text(usesVPN ? "点击同步即可更新课表，无需另开 VPN App。其他教务数据仍使用校园网直连。" : "配置北林 VPN 后，可在非校园网环境下手动更新课表。")
                 }
@@ -2341,13 +2342,17 @@ private struct CampusNetworkConnectionGuideView: View {
                     .foregroundStyle(AppTheme.secondaryText)
             }
 
-            Section("在校外") {
+            Section("非校园网环境") {
                 Label("通过北林 VPN 连接", systemImage: "network.badge.shield.half.filled")
                     .leafyHeadline()
 
-                Text("先安装 EasyConnect，使用学校账号连接北林 VPN。连接成功后返回 MyLeafy，可使用需要校园网的教务功能。")
+                Text("在“缓存与同步 → 教务连接”中填写北林 VPN 账号，即可通过流量或普通 Wi-Fi 手动更新本科课表，无需另开 VPN App。其他教务功能仍需手机连接校园网或学校 VPN。")
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
+
+                NavigationLink("配置课表 VPN 同步") {
+                    SchoolAcademicConnectionSettingsView(identity: ActiveCampusContext.identity)
+                }
 
                 Button {
                     openURL(easyConnectURL)

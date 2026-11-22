@@ -37,7 +37,9 @@ export function validateAcademicRequest(value: Record<string, unknown>): Academi
     '/jsxsd/framework/xSMain.jsp', '/jsxsd/xskb/xskb_list.do', '/jsxsd/xskb/xskb_query.do']);
   // A transport scoped to timetable/login never becomes an arbitrary school or Internet proxy.
   if (url.origin !== schoolOrigin || value.path.split('?')[0] !== url.pathname || !allowed.has(url.pathname) ||
-      (url.pathname === '/Logon.do' && url.searchParams.get('method') !== 'logon') ||
+      (url.pathname === '/Logon.do' && (url.searchParams.getAll('method').length !== 1 ||
+        url.searchParams.get('method') !== 'logon' || [...url.searchParams.keys()].some(key => !['method', 'flag'].includes(key)) ||
+        url.searchParams.getAll('flag').length > 1 || (url.searchParams.has('flag') && url.searchParams.get('flag') !== 'sess'))) ||
       (value.method === 'POST' && !['/Logon.do', '/jsxsd/xskb/xskb_list.do', '/jsxsd/xskb/xskb_query.do'].includes(url.pathname))) {
     throw failure('academic_request_denied', '这项教务资源暂不支持 VPN 同步。', false, 400);
   }

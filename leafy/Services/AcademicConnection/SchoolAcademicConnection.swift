@@ -183,7 +183,11 @@ final class SchoolAcademicConnection: ObservableObject {
         expectedIdentity = identity
         credentialOwner = identity
         do { try settings.bindPendingLogin(to: identity) }
-        catch { cleanupWarning = "教务登录成功，但 VPN 凭据未能保存，请在“教务连接”中重新设置。" }
+        catch {
+            let message = "教务登录成功，但 VPN 凭据未能保存，请在“教务连接”中重新设置。"
+            settings.storageWarning = message
+            cleanupWarning = message
+        }
         willActivate(identity)
     }
 

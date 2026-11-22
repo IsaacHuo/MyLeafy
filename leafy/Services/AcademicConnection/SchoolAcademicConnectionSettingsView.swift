@@ -47,6 +47,7 @@ struct SchoolAcademicConnectionSettingsView: View {
                 }
             }
             if let message { Section { Text(message).accessibilityIdentifier("academicConnectionMessage") } }
+            if let warning = settings.storageWarning { Section { Text(warning).foregroundStyle(.red) } }
         }
         .navigationTitle("教务连接")
         .leafyInlineNavigationTitle()

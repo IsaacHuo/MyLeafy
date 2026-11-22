@@ -27,7 +27,8 @@ function deferred<T>() {
 describe('fixed school resource transport', () => {
   it('rejects proxy escapes and unsupported resources before network access', () => {
     for (const path of ['//example.test/', '/\\example.test/', '/jsxsd/../Logon.do?method=logon',
-      '/jsxsd/%2e%2e/Logon.do?method=logon', '/%2f%2fexample.test', '/jsxsd/kscj/cjcx_list', '/Logon.do?method=delete']) {
+      '/jsxsd/%2e%2e/Logon.do?method=logon', '/%2f%2fexample.test', '/jsxsd/kscj/cjcx_list', '/Logon.do?method=delete',
+      '/Logon.do?method=logon&method=delete', '/Logon.do?method=logon&flag=other']) {
       expect(() => validateAcademicRequest({ method: 'GET', path })).toThrow();
     }
     expect(() => validateAcademicRequest({ method: 'POST', path: '/verifycode.servlet', bodyBase64: '' })).toThrow();

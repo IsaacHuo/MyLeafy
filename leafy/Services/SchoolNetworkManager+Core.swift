@@ -228,7 +228,15 @@ extension SchoolNetworkManager {
                 displayName: (trimmedDisplayName?.isEmpty == false) ? trimmedDisplayName : trimmedEduID,
                 portal: currentPortal
             )
-            academicConnection?.activateVerifiedIdentity(identity)
+            if let academicConnection { academicConnection.activateVerifiedIdentity(identity) }
+            else if currentPortal == .undergraduate {
+                // A first-login direct fallback still binds the explicitly configured VPN to its verified owner.
+                do { try SchoolVPNSettingsStore.shared.bindPendingLogin(to: identity) }
+                catch {
+                    SchoolVPNSettingsStore.shared.storageWarning = "教务登录成功，但 VPN 凭据未能保存，请在教务连接中重新填写。"
+                    SchoolVPNSettingsStore.shared.finishUse(for: nil)
+                }
+            }
             if ActiveCampusContext.identity?.scopeKey != identity.scopeKey {
                 cancelInFlightRequests(preservingAcademicConnection: true)
                 SchoolDataPrefetchCoordinator.shared.cancel()
@@ -383,6 +391,9 @@ extension SchoolNetworkManager {
     }
 
     func pageDebugSummary(html: String, responseURL: URL?, snapshotName: String) -> String {
+        if connectionMode == .serverVPN {
+            return "学校响应未通过页面校验（\(html.utf8.count) 字节）。"
+        }
         let title: String = {
             guard let document = try? SwiftSoup.parse(html) else { return L10n.text("无标题") }
             return ((try? document.title())?.trimmingCharacters(in: .whitespacesAndNewlines))
