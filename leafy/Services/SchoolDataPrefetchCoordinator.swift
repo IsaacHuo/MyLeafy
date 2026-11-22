@@ -14,6 +14,7 @@ enum SchoolDataPrefetchSkipReason: Equatable {
     case customCampus
     case missingIdentity
     case notLoggedIn
+    case vpnRequiresManualAction
     case successCooldown
     case failureCooldown
 }
@@ -59,6 +60,9 @@ final class SchoolDataPrefetchCoordinator {
     ) -> SchoolDataPrefetchStartResult {
         guard activeTask == nil else {
             return .skipped(.alreadyRunning)
+        }
+        if SchoolVPNSettingsStore.shared.isEnabled(for: ActiveCampusContext.identity) {
+            return .skipped(.vpnRequiresManualAction)
         }
 
         if ActiveCampusContext.identity?.isCustom == true {

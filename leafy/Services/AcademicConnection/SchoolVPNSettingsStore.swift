@@ -83,6 +83,7 @@ final class SchoolVPNSettingsStore: ObservableObject {
     private let vault: any SchoolVPNVault
     private var transient: [String: SchoolVPNCredential] = [:]
     private var pendingLogin: (credential: SchoolVPNCredential, remember: Bool)?
+    private var pendingLoginEnabled = false
 
     init(defaults: UserDefaults = .standard, vault: any SchoolVPNVault = KeychainSchoolVPNVault()) {
         self.defaults = defaults
@@ -90,7 +91,7 @@ final class SchoolVPNSettingsStore: ObservableObject {
     }
 
     func isEnabled(for identity: CampusIdentity?) -> Bool {
-        guard let identity else { return pendingLogin != nil }
+        guard let identity else { return pendingLoginEnabled }
         guard supports(identity) else { return false }
         return defaults.bool(forKey: enabledKey(identity))
     }
@@ -128,19 +129,26 @@ final class SchoolVPNSettingsStore: ObservableObject {
         } else {
             // The final owner is known only after school authentication. Never save under a shared login key.
             pendingLogin = (normalized, remember)
+            pendingLoginEnabled = true
         }
         revision &+= 1
         storageWarning = nil
     }
 
     func bindPendingLogin(to identity: CampusIdentity) throws {
-        guard let pendingLogin else { return }
+        guard pendingLoginEnabled else { return }
         guard supports(identity) else { throw SchoolVPNStorageFailure.unsupportedIdentity }
         // Preserve the explicit connection choice even if secure storage needs attention.
         defaults.set(true, forKey: enabledKey(identity))
+        guard let pendingLogin else {
+            pendingLoginEnabled = false
+            objectWillChange.send()
+            return
+        }
         if pendingLogin.remember { try vault.save(pendingLogin.credential, owner: identity.scopeKey) }
         else { transient[identity.scopeKey] = pendingLogin.credential }
         self.pendingLogin = nil
+        pendingLoginEnabled = false
         storageWarning = nil
         // Binding an authenticated owner is not a new configuration and must not cancel that login.
         objectWillChange.send()
@@ -164,7 +172,7 @@ final class SchoolVPNSettingsStore: ObservableObject {
             try vault.remove(owner: identity.scopeKey)
             transient.removeValue(forKey: identity.scopeKey)
             defaults.removeObject(forKey: enabledKey(identity))
-        } else { pendingLogin = nil }
+        } else { pendingLogin = nil; pendingLoginEnabled = false }
         revision &+= 1
     }
 

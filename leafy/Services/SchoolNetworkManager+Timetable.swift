@@ -352,6 +352,13 @@ extension SchoolNetworkManager {
         let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled { throw SchoolNetworkError.featureUnavailable("演示模式使用本地课表样例，不连接学校教务系统。") }
         if currentPortal == .graduate { return try await fetchGraduateTimetable() }
+        if connectionMode == .serverVPN, !isLoggedIn {
+            guard let url = URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp") else { throw URLError(.badURL) }
+            let (page, _) = try await html(from: url)
+            try scope.check()
+            guard isAuthenticatedResponse(url: nil, html: page) else { throw SchoolNetworkError.sessionExpired }
+            isLoggedIn = true
+        }
         let initial = try await fetchDefaultTimetable()
         try scope.check()
         if connectionMode == .serverVPN { return initial }
@@ -439,6 +446,7 @@ extension SchoolNetworkManager {
             persistLandingURL(candidateResponse.url)
 
             if isLoginPage(candidateHTML) {
+                if connectionMode == .serverVPN { isLoggedIn = false; throw SchoolNetworkError.sessionExpired }
                 continue
             }
 

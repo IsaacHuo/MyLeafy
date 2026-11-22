@@ -1960,8 +1960,8 @@ private struct CacheAndSyncView: View {
                     } label: {
                         LabeledContent("教务连接", value: usesVPN ? "北林 VPN 同步" : "校园网直连")
                     }
+                    .disabled(isSyncing || isClearing)
                     if let warning = vpnSettings.storageWarning { Text(warning).foregroundStyle(AppTheme.danger) }
-                        .disabled(isSyncing || isClearing)
                 } footer: {
                     Text(usesVPN ? "点击同步即可更新课表，无需另开 VPN App。其他教务数据仍使用校园网直连。" : "配置北林 VPN 后，可在非校园网环境下手动更新课表。")
                 }

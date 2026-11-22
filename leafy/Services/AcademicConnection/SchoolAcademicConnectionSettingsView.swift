@@ -30,6 +30,7 @@ struct SchoolAcademicConnectionSettingsView: View {
                 Text("北林 VPN 同步 · 推荐")
             } footer: {
                 Text("填写学校 VPN 账号和密码，可能与教务密码不同。保存的凭据仅存于此设备的钥匙串；不保存时仅供下一次操作使用。连接器通过 HTTPS 接收本次凭据，不写入数据库或日志。")
+                if identity == nil { Text("首次登录成功后才会绑定账号并保存凭据。") }
             }
             Section {
                 Text("校园网直连")

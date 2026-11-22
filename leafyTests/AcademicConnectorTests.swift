@@ -110,6 +110,24 @@ final class AcademicConnectorTests: XCTestCase {
         XCTAssertTrue(try settings.isSaved(for: identity))
     }
 
+    func testFailedFirstActionDoesNotSilentlyChangeVPNChoiceToDirect() throws {
+        let (settings, _, defaults, suite) = fixtureSettings()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        try settings.configure(
+            SchoolVPNCredential(account: "synthetic", password: "synthetic"),
+            remember: false,
+            identity: nil
+        )
+        settings.finishUse(for: nil)
+        XCTAssertNil(try settings.credential(for: nil))
+        XCTAssertTrue(settings.isEnabled(for: nil))
+        let identity = owner("synthetic-first-fallback")
+        try settings.bindPendingLogin(to: identity)
+        XCTAssertTrue(settings.isEnabled(for: identity))
+        XCTAssertNil(try settings.credential(for: identity))
+        XCTAssertFalse(settings.isEnabled(for: nil))
+    }
+
     func testStorageFailurePreservesEnabledPreferenceAndReportsFailure() throws {
         let (settings, vault, defaults, suite) = fixtureSettings()
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -239,6 +257,43 @@ final class AcademicConnectorTests: XCTestCase {
         XCTAssertFalse(connection.isConnected)
     }
 
+    func testVPNTimetableValidatesExistingSchoolSessionBeforeRequestingLogin() async throws {
+        let (settings, _, defaults, suite) = fixtureSettings()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let identity = owner("synthetic-session")
+        try settings.configure(
+            SchoolVPNCredential(account: "synthetic", password: "synthetic"),
+            remember: true,
+            identity: identity
+        )
+        let api = AcademicLifecycleFixture(schoolPages: true)
+        let connection = SchoolAcademicConnection(settings: settings, credentialOwner: identity, client: { api })
+        let manager = SchoolNetworkManager(connectionMode: .serverVPN, academicConnection: connection)
+        connection.manager = manager
+        let flagKey = CampusScopedDefaults.key("serverVPN.isLoggedIn")
+        let oldFlag = UserDefaults.standard.object(forKey: flagKey)
+        let landingKey = CampusScopedDefaults.key("serverVPN.lastLandingURL")
+        let oldLanding = UserDefaults.standard.object(forKey: landingKey)
+        defer {
+            UserDefaults.standard.set(oldFlag, forKey: flagKey)
+            UserDefaults.standard.set(oldLanding, forKey: landingKey)
+        }
+        manager.isLoggedIn = false
+        manager.persistedCookieValues = ["JSESSIONID": "synthetic-existing-session"]
+        XCTAssertNil(SchoolReauthentication.preflightRequest(
+            networkManager: manager,
+            context: .timetable(portal: .undergraduate)
+        ))
+        let document = try await manager.fetchTimetable()
+        XCTAssertTrue(document.html.contains("kbtable"))
+        let requests = await api.requestPaths()
+        XCTAssertEqual(requests, ["/jsxsd/framework/xsMain.jsp", "/jsxsd/xskb/xskb_list.do"])
+        let counts = await api.counts()
+        XCTAssertEqual(counts.starts, 1)
+        XCTAssertEqual(counts.closes, 1)
+        XCTAssertTrue(manager.isLoggedIn)
+    }
+
     private func owner(_ account: String) -> CampusIdentity {
         CampusIdentity(campusID: .bjfu, eduID: account, displayName: "合成学生", portal: .undergraduate)
     }
@@ -255,12 +310,15 @@ private actor AcademicLifecycleFixture: AcademicConnectorServicing {
     private var starts = 0
     private var closes = 0
     private let paused: Bool
+    private let schoolPages: Bool
+    private var paths: [String] = []
     private let closeResult: AcademicConnectorCloseResult
     private var pendingStart: CheckedContinuation<Void, Never>?
     private var waiting: [CheckedContinuation<Void, Never>] = []
-    init(paused: Bool = false, closeResult: AcademicConnectorCloseResult = .confirmed) {
+    init(paused: Bool = false, closeResult: AcademicConnectorCloseResult = .confirmed, schoolPages: Bool = false) {
         self.paused = paused
         self.closeResult = closeResult
+        self.schoolPages = schoolPages
     }
     func start(credential: SchoolVPNCredential, cookies: [String: String]) async throws -> AcademicConnectorLease {
         starts += 1
@@ -276,11 +334,21 @@ private actor AcademicLifecycleFixture: AcademicConnectorServicing {
     }
     func execute(_ request: AcademicSchoolRequest,
                  lease: AcademicConnectorLease) async throws -> AcademicSchoolResponse {
-        throw URLError(.unsupportedURL)
+        guard schoolPages else { throw URLError(.unsupportedURL) }
+        paths.append(request.path)
+        let page = request.path.contains("xsMain.jsp") ? "<html>退出系统</html>" : "<table id=\"kbtable\"></table>"
+        return AcademicSchoolResponse(
+            data: Data(page.utf8),
+            url: URL(string: "http://newjwxt.bjfu.edu.cn\(request.path)")!,
+            status: 200,
+            contentType: "text/html",
+            cookies: request.cookies
+        )
     }
     func close(_ lease: AcademicConnectorLease) async -> AcademicConnectorCloseResult { closes += 1; return closeResult
     }
     func counts() -> (starts: Int, closes: Int) { (starts, closes) }
+    func requestPaths() -> [String] { paths }
     func waitForStart() async { if pendingStart != nil { return }; await withCheckedContinuation { waiting.append($0) }
     }
     func resumeStart() { pendingStart?.resume(); pendingStart = nil }

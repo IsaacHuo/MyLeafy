@@ -35,6 +35,8 @@ nonisolated enum SchoolReauthentication {
         context: SchoolReauthenticationContext,
         allowsAutomaticAttempt: Bool = true
     ) -> SchoolReauthenticationRequest? {
+        // The VPN outlet validates its own candidate session in the user action before asking for a password.
+        if networkManager.connectionMode == .serverVPN { return nil }
         guard SchoolSessionRecoveryPolicy.shouldBeginRecovery(
             hasCachedIdentity: networkManager.hasCachedIdentity,
             isLoggedIn: networkManager.isLoggedIn

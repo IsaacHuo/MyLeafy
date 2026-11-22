@@ -2311,7 +2311,7 @@ struct TimetableView: View {
             return
         }
 
-        guard networkManager.isLoggedIn else {
+        guard networkManager.isLoggedIn || networkManager.connectionMode == .serverVPN else {
             if userInitiated, networkManager.hasCachedIdentity {
                 reauthenticationRequest = SchoolReauthenticationRequest(
                     context: .timetable(portal: networkManager.currentPortal),
