@@ -1698,7 +1698,7 @@ extension PerformanceRefactorTests {
 
         let draft = try XCTUnwrap(currentWeekDrafts.first)
         XCTAssertEqual(draft.title, "森林生态学")
-        XCTAssertEqual(draft.location, "二教 101")
+        XCTAssertEqual(draft.location, "")
         XCTAssertTrue(draft.notes.contains("教师：陈老师"))
         XCTAssertTrue(draft.notes.contains("节次：第 1-2 节"))
         XCTAssertTrue(draft.notes.contains("周次：第 2 周"))
@@ -1708,12 +1708,12 @@ extension PerformanceRefactorTests {
         let reminderDraft = try XCTUnwrap(currentWeekDrafts
             .first { $0.occurrenceKey == "cellReminder:\(reminder.id.uuidString.lowercased())" })
         XCTAssertEqual(reminderDraft.title, "预习植物分类")
-        XCTAssertEqual(reminderDraft.location, "图书馆二层")
+        XCTAssertEqual(reminderDraft.location, "")
         XCTAssertTrue(reminderDraft.notes.contains("类型：日程"))
-        XCTAssertTrue(reminderDraft.notes.contains("地点：图书馆二层"))
+        XCTAssertFalse(reminderDraft.notes.contains("地点：图书馆二层"))
         XCTAssertTrue(reminderDraft.notes.contains("节次：第 3-4 节"))
         XCTAssertTrue(reminderDraft.notes.contains("备注：带笔记本"))
-        XCTAssertTrue(reminderDraft.notes.contains("本地通知：提前 20 分钟"))
+        XCTAssertFalse(reminderDraft.notes.contains("本地通知：提前 20 分钟"))
         XCTAssertEqual(
             TimetableCalendarExportBuilder.occurrenceKey(from: reminderDraft.url),
             reminderDraft.occurrenceKey
@@ -1721,7 +1721,7 @@ extension PerformanceRefactorTests {
 
         let examDraft = try XCTUnwrap(currentWeekDrafts.first { $0.occurrenceKey == "exam:7" })
         XCTAssertEqual(examDraft.title, "考试：森林生态学")
-        XCTAssertEqual(examDraft.location, "二教 201")
+        XCTAssertEqual(examDraft.location, "")
         XCTAssertTrue(examDraft.notes.contains("类型：考试"))
         XCTAssertTrue(examDraft.notes.contains("课程编号：FOREST-001"))
         XCTAssertEqual(TimetableCalendarExportBuilder.occurrenceKey(from: examDraft.url), examDraft.occurrenceKey)

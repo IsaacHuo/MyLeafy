@@ -127,7 +127,7 @@ final class TimetableTeacherProjectionTests: XCTestCase {
                     drafts.first { $0.occurrenceKey == course.occurrenceKey(week: week) }
                 )
                 XCTAssertTrue(draft.notes.contains(L10n.text("教师：%@", teacher)))
-                XCTAssertEqual(draft.location, "二教 101")
+                XCTAssertEqual(draft.location, "")
                 XCTAssertEqual(
                     draft.startDate,
                     try XCTUnwrap(TimetablePeriodSchedule.startDate(for: course, week: week))
@@ -214,7 +214,7 @@ final class TimetableTeacherProjectionTests: XCTestCase {
                         newDrafts.first { $0.occurrenceKey == course.occurrenceKey(week: week) }
                     )
                     XCTAssertEqual(draft.title, course.displayCourseName)
-                    XCTAssertEqual(draft.location, course.locationTextForShare)
+                    XCTAssertEqual(draft.location, "")
                     XCTAssertEqual(
                         draft.startDate,
                         try XCTUnwrap(TimetablePeriodSchedule.startDate(for: course, week: week))
@@ -327,7 +327,7 @@ final class TimetableTeacherProjectionTests: XCTestCase {
                 }
                 let presentation = DraftPresentation(
                     title: course.displayCourseName,
-                    location: course.locationTextForShare,
+                    location: "",
                     startDate: startDate,
                     endDate: endDate
                 )

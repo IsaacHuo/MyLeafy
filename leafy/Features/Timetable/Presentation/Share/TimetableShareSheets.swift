@@ -17,6 +17,17 @@ struct TimetableExportSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
+    @State private var calendarService = TimetableCalendarExportService()
+    @State private var selectedCategories = Set(TimetableCalendarExportCategory.allCases)
+    @State private var calendarDestinations: [TimetableCalendarDestination] = []
+    @State private var selectedCalendarID: String?
+    @State private var isLoadingCalendars = false
+    @State private var legacyConfirmation: CalendarLegacyConfirmation?
+    private struct CalendarLegacyConfirmation {
+        let identifiers: Set<String>
+        let isClearing: Bool
+        let scope: CampusOperationScope
+    }
     @State private var selectedRange: TimetableCalendarExportRange = .remainingSemester
     @State private var isExportingCalendar = false
     @State private var isClearingCalendar = false
@@ -99,8 +110,30 @@ struct TimetableExportSheet: View {
                     Task { await clearExportedCourses() }
                 }
             } message: {
-                Text("将移除本学期所有由 \(AppBrand.displayName) 写入系统日历的课程、考试和提醒事件。")
+                Text("将从所有系统日历中移除所选周次与内容类别的 \(AppBrand.displayName) 事件，其他内容保留。")
             }
+            .alert("接管旧版导出事件？", isPresented: Binding(
+                get: { legacyConfirmation != nil },
+                set: { if !$0 { legacyConfirmation = nil } }
+            ), presenting: legacyConfirmation) { confirmation in
+                Button("取消", role: .cancel) { legacyConfirmation = nil }
+                Button("确认并继续") {
+                    legacyConfirmation = nil
+                    Task {
+                        guard confirmation.scope.isCurrent else { return }
+                        if confirmation.isClearing {
+                            await clearExportedCourses(confirmedLegacyEventIDs: confirmation.identifiers)
+                        } else {
+                            await exportToCalendar(confirmedLegacyEventIDs: confirmation.identifiers)
+                        }
+                    }
+                }
+            } message: { confirmation in
+                Text(
+                    "发现 \(confirmation.identifiers.count) 个旧版 Leafy 事件，无法判断原账号。确认后将按所选周次与内容更新或清理；取消不会作任何更改。"
+                )
+            }
+            .task { await loadCalendarDestinations(requestAccess: false) }
             .leafyOperationAlert($operationAlert)
         }
     }
@@ -114,10 +147,45 @@ struct TimetableExportSheet: View {
                     Text("导出到系统日历")
                         .leafyHeadline()
                         .foregroundStyle(AppTheme.primaryText)
-                    Text("重复导出会覆盖更新 \(AppBrand.displayName) 已写入的课程、考试和提醒事件。")
+                    Text("重复导出会更新所选内容并移入目标日历。导出的事件不附带通知提醒或定位信息。")
                         .microCaption()
                         .foregroundStyle(AppTheme.secondaryText)
                 }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("导出内容").leafyBody()
+                ForEach(TimetableCalendarExportCategory.allCases) { category in
+                    Toggle(category.title, isOn: Binding(
+                        get: { selectedCategories.contains(category) },
+                        set: { selected in
+                            if selected { selectedCategories.insert(category) }
+                            else { selectedCategories.remove(category) }
+                        }
+                    ))
+                }
+            }
+            .disabled(isExportingCalendar || isClearingCalendar)
+
+            if calendarDestinations.isEmpty {
+                Button {
+                    Task { await loadCalendarDestinations(requestAccess: true) }
+                } label: {
+                    HStack {
+                        Label("选择目标日历", systemImage: "calendar")
+                        Spacer()
+                        if isLoadingCalendars { ProgressView() }
+                    }
+                }
+                .disabled(isLoadingCalendars || isExportingCalendar || isClearingCalendar)
+            } else {
+                Picker("目标日历", selection: $selectedCalendarID) {
+                    ForEach(calendarDestinations) { destination in
+                        Text(destination.displayTitle).tag(Optional(destination.id))
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(isExportingCalendar || isClearingCalendar)
             }
 
             Picker("导出范围", selection: $selectedRange) {
@@ -126,16 +194,17 @@ struct TimetableExportSheet: View {
                 }
             }
             .pickerStyle(.segmented)
+            .disabled(isExportingCalendar || isClearingCalendar)
 
             if selectedRange == .customWeeks {
-                customWeekRangeControls
+                customWeekRangeControls.disabled(isExportingCalendar || isClearingCalendar)
             }
 
             Button {
                 Task { await exportToCalendar() }
             } label: {
                 ZStack {
-                    Label("导出到本地日历", systemImage: "calendar.badge.plus")
+                    Label("导出到系统日历", systemImage: "calendar.badge.plus")
                         .frame(maxWidth: .infinity, alignment: .center)
                     if isExportingCalendar {
                         HStack {
@@ -148,7 +217,8 @@ struct TimetableExportSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(AppTheme.accent)
-            .disabled(isExportingCalendar || isClearingCalendar || exportableItemCount == 0)
+            .disabled(isExportingCalendar || isClearingCalendar || isLoadingCalendars
+                || selectedCalendarID == nil || selectedCategories.isEmpty)
 
             Divider()
 
@@ -169,7 +239,7 @@ struct TimetableExportSheet: View {
             }
             .buttonStyle(.bordered)
             .tint(.red)
-            .disabled(isExportingCalendar || isClearingCalendar)
+            .disabled(isExportingCalendar || isClearingCalendar || isLoadingCalendars || selectedCategories.isEmpty)
         }
         .padding(18)
         .leafyCardStyle()
@@ -296,10 +366,6 @@ struct TimetableExportSheet: View {
         max(1, SemesterConfig.supportedWeeks)
     }
 
-    private var exportableItemCount: Int {
-        courses.count + cellReminders.count + exams.count
-    }
-
     private var customWeekRange: ClosedRange<Int> {
         let startWeek = clampedCustomWeek(customStartWeek)
         let endWeek = clampedCustomWeek(customEndWeek)
@@ -341,39 +407,82 @@ struct TimetableExportSheet: View {
     }
 
     @MainActor
-    private func exportToCalendar() async {
-        guard !isExportingCalendar else { return }
+    private func loadCalendarDestinations(requestAccess: Bool) async {
+        guard !isLoadingCalendars else { return }
+        let scope = CampusOperationScope()
+        isLoadingCalendars = true
+        defer { isLoadingCalendars = false }
+        do {
+            let destinations = try await calendarService.writableCalendars(requestAccess: requestAccess)
+            try scope.check()
+            calendarDestinations = destinations
+            if !destinations.contains(where: { $0.id == selectedCalendarID }) {
+                selectedCalendarID = destinations.first(where: \.isDefault)?.id ?? destinations.first?.id
+            }
+            if requestAccess && destinations.isEmpty {
+                operationAlert = .failure(TimetableCalendarExportError.calendarUnavailable.localizedDescription)
+            }
+        } catch { if scope.isCurrent { operationAlert = .failure(error.localizedDescription) } }
+    }
+
+    @MainActor
+    private func exportToCalendar(confirmedLegacyEventIDs: Set<String> = []) async {
+        guard !isExportingCalendar, !isClearingCalendar, let selectedCalendarID else { return }
+        let scope = CampusOperationScope()
         isExportingCalendar = true
         defer { isExportingCalendar = false }
 
         do {
-            let result = try await TimetableCalendarExportService().export(
+            let result = try await calendarService.export(
                 courses: courses,
                 courseNotes: courseNotes,
                 occurrenceNotes: occurrenceNotes,
                 cellReminders: cellReminders,
                 exams: exams,
+                categories: selectedCategories,
+                calendarIdentifier: selectedCalendarID,
                 range: selectedRange,
                 currentWeek: currentWeek,
-                customWeeks: selectedRange == .customWeeks ? customWeekRange : nil
+                customWeeks: selectedRange == .customWeeks ? customWeekRange : nil,
+                confirmedLegacyEventIDs: confirmedLegacyEventIDs
             )
+            try scope.check()
             operationAlert = .success(result.message)
+        } catch TimetableCalendarExportError.legacyEventsRequireConfirmation(let identifiers) {
+            if scope.isCurrent { legacyConfirmation = CalendarLegacyConfirmation(
+                identifiers: identifiers,
+                isClearing: false,
+                scope: scope
+            ) }
         } catch {
-            operationAlert = .failure(error.localizedDescription)
+            if scope.isCurrent { operationAlert = .failure(error.localizedDescription) }
         }
     }
 
     @MainActor
-    private func clearExportedCourses() async {
-        guard !isClearingCalendar else { return }
+    private func clearExportedCourses(confirmedLegacyEventIDs: Set<String> = []) async {
+        guard !isClearingCalendar, !isExportingCalendar else { return }
+        let scope = CampusOperationScope()
         isClearingCalendar = true
         defer { isClearingCalendar = false }
 
         do {
-            let result = try await TimetableCalendarExportService().clearExportedCourses()
+            let result = try await calendarService.clearExportedCourses(
+                cellReminders: cellReminders, exams: exams,
+                categories: selectedCategories, range: selectedRange, currentWeek: currentWeek,
+                customWeeks: selectedRange == .customWeeks ? customWeekRange : nil,
+                confirmedLegacyEventIDs: confirmedLegacyEventIDs
+            )
+            try scope.check()
             operationAlert = .success(result.message)
+        } catch TimetableCalendarExportError.legacyEventsRequireConfirmation(let identifiers) {
+            if scope.isCurrent { legacyConfirmation = CalendarLegacyConfirmation(
+                identifiers: identifiers,
+                isClearing: true,
+                scope: scope
+            ) }
         } catch {
-            operationAlert = .failure(error.localizedDescription)
+            if scope.isCurrent { operationAlert = .failure(error.localizedDescription) }
         }
     }
 }

@@ -1,6 +1,136 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "导出内容" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include"
+          }
+        }
+      }
+    },
+    "目标日历" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calendar"
+          }
+        }
+      }
+    },
+    "选择目标日历" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a calendar"
+          }
+        }
+      }
+    },
+    "接管旧版导出事件？" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage older exported events?"
+          }
+        }
+      }
+    },
+    "确认并继续" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm and continue"
+          }
+        }
+      }
+    },
+    "重复导出会更新所选内容并移入目标日历。导出的事件不附带通知提醒或定位信息。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporting again updates the selected content and moves it to the chosen calendar. Exported events have no alerts or location information."
+          }
+        }
+      }
+    },
+    "将从所有系统日历中移除所选周次与内容类别的 %@ 事件，其他内容保留。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove %@ events for the selected weeks and content types from all calendars. Other content will be kept."
+          }
+        }
+      }
+    },
+    "发现 %lld 个旧版 Leafy 事件，无法判断原账号。确认后将按所选周次与内容更新或清理；取消不会作任何更改。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found %lld older Leafy events whose original account is unknown. Confirm to update or remove events for the selected weeks and content types. Cancel to leave everything unchanged."
+          }
+        }
+      }
+    },
+    "系统日历中没有所选范围内 %@ 已导出的课表事件。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No timetable events exported by %@ were found in the selected range."
+          }
+        }
+      }
+    },
+    "已从系统日历清理所选范围内 %@ 课表事件：移除 %d 个。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removed %2$d timetable events exported by %1$@ from the selected range."
+          }
+        }
+      }
+    },
+    "部分已导出事件所在日历不可编辑，未作更改。请先在系统日历中恢复编辑权限。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some exported events are in calendars that cannot be edited. No changes were made. Restore editing access in Calendar first."
+          }
+        }
+      }
+    },
+    "发现 %d 个旧版导出事件，需确认后才能更新或清理。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found %d older exported events. Confirm before updating or removing them."
+          }
+        }
+      }
+    },
+    "没有结束时间的日程在 Apple 日历中按 45 分钟安排，不附带通知提醒或定位信息。TXT 保留原始信息。再次导出可更新已导出的事件。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Events without an end time last 45 minutes in Apple Calendar, with no alerts or location information. TXT keeps the original information. Export again to update existing events."
+          }
+        }
+      }
+    },
     "androidShare.feature.timetable" : {
       "localizations" : {
         "zh-Hans" : {
