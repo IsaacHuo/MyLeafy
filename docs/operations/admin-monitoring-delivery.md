@@ -2,6 +2,14 @@
 
 2026-11-04 初次交付，跟踪 #65。当次运行源码 `7e092f09ca64fa9d8cb836c03d982b818794818b`。
 
+## WebSocket 延迟告警修复（2026-11-22）
+
+[#85](https://github.com/IsaacHuo/MyLeafy/issues/85) 已在生产生效。日报、后台图表和告警的 HTTP 延迟排除 WebSocket 成功升级的 101。自动化验证覆盖真实慢请求仍触发告警，以及旧延迟通知和日报的切换。
+
+[staging 44978514500](https://github.com/IsaacHuo/MyLeafy/actions/runs/44978514500) 完整验证及部署成功。GitHub 构建任务保留归档，经本机 Workbench 上传并核对 SHA-256 `e5c92cd281c6f731fd4fe2368426d7ca0b74c011d6e2edf958bd7c3e4219a69d`，重跑发布任务复用原包。所有者批准的 [production 44979122260](https://github.com/IsaacHuo/MyLeafy/actions/runs/44979122260) 使用同一归档成功，生产部署报告完成于北京时间 11:09:49，源码 `92283b2e00cdf8ecc0c7d4c7643db9933088946f`。
+
+生产官网 `/release.json` 与 API `/health` 返回同一源码，API 与 monitor 服务 active，采集正常。切换已取消 12 封待发的旧口径延迟通知，旧口径活跃告警和待发通知均为零，历史记录保留。
+
 ## Android 版本入口修复（2026-11-07）
 
 [#77](https://github.com/IsaacHuo/MyLeafy/issues/77) / [PR #78](https://github.com/IsaacHuo/MyLeafy/pull/78)：业务菜单遗漏独立 Android 版本页，现已补回入口。原路由、查看/发布权限、API、数据库和 APK 均保持。新增从总览点击导航的回归覆盖三种角色、移动抽屉、选中状态、刷新/直达和权限拒绝；旧代码可准确复现缺失，发行请求只使用模拟接口。本地类型、生产构建、74 项单元及 33 项相关 Chromium/WebKit/iPad WebKit 用例通过。
