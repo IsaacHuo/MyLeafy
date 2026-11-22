@@ -66,6 +66,8 @@ final class CourseReminderSetting {
     var courseKey: String
     var minutesBefore: Int
     var anchorPeriod: Int?
+    /// nil is the existing course-wide default; a week stores an occurrence override, including off.
+    var week: Int?
     var updatedAt: Date
 
     init(
@@ -73,13 +75,19 @@ final class CourseReminderSetting {
         courseKey: String,
         minutesBefore: Int = 0,
         anchorPeriod: Int? = nil,
+        week: Int? = nil,
         updatedAt: Date = Date()
     ) {
         self.id = id
         self.courseKey = courseKey
         self.minutesBefore = minutesBefore
         self.anchorPeriod = anchorPeriod
+        self.week = week
         self.updatedAt = updatedAt
+    }
+
+    var scopeKey: String {
+        week.map { CourseOccurrenceNote.occurrenceKey(courseKey: courseKey, week: $0) } ?? courseKey
     }
 }
 

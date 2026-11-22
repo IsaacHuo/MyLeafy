@@ -1,3 +1,4 @@
+import CoreData
 import Foundation
 import SwiftData
 
@@ -70,12 +71,16 @@ enum TimetableLocalEdits {
     }
 
     static func setReminder(
-        courseKey: String, minutesBefore: Int, anchorPeriod: Int?, in context: ModelContext,
+        courseKey: String, minutesBefore: Int, anchorPeriod: Int?, week: Int? = nil, in context: ModelContext,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
-        let existing = try context.fetch(FetchDescriptor<CourseReminderSetting>())
-            .first { !$0.isUnassociated && $0.courseKey == courseKey }
-        let setting = existing ?? CourseReminderSetting(courseKey: courseKey)
+        if let week, !(1 ... SemesterConfig.timetableWeekCapacity).contains(week) {
+            throw CocoaError(.validationMissingMandatoryProperty)
+        }
+        let existing = CourseReminderResolver.record(courseKey: courseKey, week: week,
+                                                     settings: try context
+                                                         .fetch(FetchDescriptor<CourseReminderSetting>()))
+        let setting = existing ?? CourseReminderSetting(courseKey: courseKey, week: week)
         let previous = (setting.minutesBefore, setting.anchorPeriod, setting.updatedAt)
         if existing == nil { context.insert(setting) }
         setting.minutesBefore = minutesBefore

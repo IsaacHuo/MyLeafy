@@ -1,6 +1,96 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "可多选" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select multiple"
+          }
+        }
+      }
+    },
+    "允许访问日历后，可选择导出位置并更新已导出的课表。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow Calendar access to choose a destination and update previously exported events."
+          }
+        }
+      }
+    },
+    "授权日历访问" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow Calendar access"
+          }
+        }
+      }
+    },
+    "提醒范围" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reminder scope"
+          }
+        }
+      }
+    },
+    "只调整这一次课，其他课次不变。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applies only to this occurrence. Other occurrences are unchanged."
+          }
+        }
+      }
+    },
+    "作为这门课的默认提醒，已单独设置的课次不变。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sets the default for this course. Occurrences with their own settings keep them."
+          }
+        }
+      }
+    },
+    "已关闭这门课的默认提醒。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default reminders for this course are off."
+          }
+        }
+      }
+    },
+    "已关闭本次课的提醒。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reminder for this occurrence is off."
+          }
+        }
+      }
+    },
+    "提醒设置已保存，但 %d 项系统提醒排期失败：%@。请检查通知设置后再次应用。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reminder settings were saved, but %d system reminders could not be scheduled: %@. Check notification settings and apply again."
+          }
+        }
+      }
+    },
     "保存图片" : {
       "localizations" : {
         "en-US" : {

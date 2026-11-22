@@ -50,7 +50,7 @@ enum TimetableArrangementIdentityMigration {
             }
         }
         for reminder in reminders {
-            guard let matches = candidates(key: reminder.courseKey) else { continue }
+            guard let matches = candidates(key: reminder.courseKey, week: reminder.week) else { continue }
             if Set(matches.map(\.stableCourseKey)).count == 1, let match = matches.first {
                 reminder.courseKey = match.stableCourseKey
                 migratedKeys.insert(match.stableCourseKey)
@@ -71,10 +71,11 @@ enum TimetableArrangementIdentityMigration {
                 for note in group { note.isUnassociated = true }
             }
         }
-        for (key, group) in Dictionary(grouping: reminders.filter { !$0.isUnassociated }, by: \.courseKey)
-            where migratedKeys.contains(key) && Set(group.map { "\($0.minutesBefore):\($0.anchorPeriod ?? 0)" })
-            .count > 1 {
-            for reminder in group { reminder.isUnassociated = true }
+        for group in Dictionary(grouping: reminders.filter { !$0.isUnassociated }, by: \.scopeKey).values {
+            if let first = group.first, migratedKeys.contains(first.courseKey),
+               Set(group.map { "\($0.minutesBefore):\($0.anchorPeriod ?? 0)" }).count > 1 {
+                for reminder in group { reminder.isUnassociated = true }
+            }
         }
         return changed
     }

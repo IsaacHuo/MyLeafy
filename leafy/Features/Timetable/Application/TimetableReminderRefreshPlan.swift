@@ -35,6 +35,8 @@ struct LiveTimetableCourseReminderScheduler: TimetableCourseReminderScheduling {
 
 @MainActor
 struct TimetableReminderRefreshPlan {
+    enum FailureContext: Equatable { case timetableRefresh, settingsUpdate }
+
     struct Schedule {
         let course: Course
         let minutesBefore: Int
@@ -47,20 +49,38 @@ struct TimetableReminderRefreshPlan {
 
     init(oldIdentifiers: [String], courses: [Course], settings: [CourseReminderSetting]) throws {
         obsoleteIdentifiers = oldIdentifiers
+        struct Configuration: Hashable {
+            let minutes: Int
+            let anchor: Int?
+        }
         let byKey = Dictionary(grouping: settings.filter { !$0.isUnassociated }, by: \.courseKey)
-        schedules = try courses.compactMap { course in
-            guard let matches = byKey[course.stableCourseKey],
-                  let setting = matches.max(by: { $0.updatedAt < $1.updatedAt }) else { return nil }
-            guard matches
-                .allSatisfy({ $0.minutesBefore == setting.minutesBefore && $0.anchorPeriod == setting.anchorPeriod })
-            else {
-                throw TimetableLocalDataConflict.conflictingRecords(course.courseName)
+        schedules = try courses.flatMap { course -> [Schedule] in
+            let matches = byKey[course.stableCourseKey] ?? []
+            for group in Dictionary(grouping: matches, by: \.week).values {
+                guard let first = group.first,
+                      group
+                          .allSatisfy({
+                              $0.minutesBefore == first.minutesBefore && $0.anchorPeriod == first.anchorPeriod })
+                else { throw TimetableLocalDataConflict.conflictingRecords(course.courseName) }
             }
-            guard setting.minutesBefore > 0 else { return nil }
-            // Notification APIs suspend. A later refresh can delete the persisted model
-            // while this plan is waiting, so retain an unmanaged copy for scheduling.
-            let snapshot = Self.courseSnapshot(course)
-            return Schedule(course: snapshot, minutesBefore: setting.minutesBefore, anchorPeriod: setting.anchorPeriod)
+            var weeksByConfiguration: [Configuration: [Int]] = [:]
+            for week in Set(course.weeks).sorted() {
+                guard let setting = CourseReminderResolver.effective(courseKey: course.stableCourseKey, week: week,
+                                                                     settings: matches),
+                    setting.minutesBefore > 0 else { continue }
+                let configuration = Configuration(minutes: setting.minutesBefore, anchor: setting.anchorPeriod)
+                weeksByConfiguration[configuration, default: []].append(week)
+            }
+            return weeksByConfiguration.map { configuration, weeks in
+                // Scheduling suspends; keep unmanaged value snapshots with only the weeks using this setting.
+                let snapshot = Self.courseSnapshot(course)
+                snapshot.weeks = weeks
+                return Schedule(
+                    course: snapshot,
+                    minutesBefore: configuration.minutes,
+                    anchorPeriod: configuration.anchor
+                )
+            }.sorted { ($0.course.weeks.first ?? 0) < ($1.course.weeks.first ?? 0) }
         }
         var identifiers = Set<String>()
         for schedule in schedules {
@@ -86,7 +106,8 @@ struct TimetableReminderRefreshPlan {
 
     /// Called only after the database commit. Rebuilding from persisted settings on every
     /// successful refresh also retries any previously failed notification scheduling.
-    func restore(using scheduler: any TimetableCourseReminderScheduling = LiveTimetableCourseReminderScheduler()) async
+    func restore(using scheduler: any TimetableCourseReminderScheduling = LiveTimetableCourseReminderScheduler(),
+                 context: FailureContext = .timetableRefresh) async
         -> String? {
         guard scope.isCurrent, !Task.isCancelled else { return nil }
         scheduler.cancel(identifiers: obsoleteIdentifiers)
@@ -106,6 +127,10 @@ struct TimetableReminderRefreshPlan {
         guard let firstError else { return nil }
         Logger(subsystem: "com.isaachuo.leafy", category: "TimetableRefresh")
             .error("Course reminder restoration failed for \(failureCount) schedules after timetable commit")
+        if context == .settingsUpdate {
+            return L10n.text("提醒设置已保存，但 %d 项系统提醒排期失败：%@。请检查通知设置后再次应用。",
+                             failureCount, firstError.localizedDescription)
+        }
         return L10n.text(
             "课表已更新，但 %d 项课程提醒未恢复：%@。请检查通知设置后再次刷新课表。",
             failureCount, firstError.localizedDescription

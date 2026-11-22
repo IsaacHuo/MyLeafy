@@ -230,6 +230,7 @@ nonisolated struct SyncedCourseReminderSetting: Codable {
     var courseKey: String
     var minutesBefore: Int
     var anchorPeriod: Int?
+    var week: Int?
     var updatedAt: Date
 }
 
@@ -244,6 +245,7 @@ extension SyncedCourseReminderSetting: ICloudModelValue {
         courseKey = model.courseKey
         minutesBefore = model.minutesBefore
         anchorPeriod = model.anchorPeriod
+        week = model.week
         updatedAt = model.updatedAt
     }
     @MainActor func make() -> CourseReminderSetting {
@@ -252,6 +254,7 @@ extension SyncedCourseReminderSetting: ICloudModelValue {
             courseKey: courseKey,
             minutesBefore: minutesBefore,
             anchorPeriod: anchorPeriod,
+            week: week,
             updatedAt: updatedAt
         )
         apply(to: model)
@@ -264,6 +267,7 @@ extension SyncedCourseReminderSetting: ICloudModelValue {
         model.courseKey = courseKey
         model.minutesBefore = minutesBefore
         model.anchorPeriod = anchorPeriod
+        model.week = week
         model.updatedAt = updatedAt
     }
 }

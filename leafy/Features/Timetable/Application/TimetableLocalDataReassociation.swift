@@ -43,9 +43,15 @@ struct TimetableLocalDataReassociation {
                 note.sourceCourseTitle = previous.4; note.updatedAt = previous.5 }
         }
         let reminders = try context.fetch(FetchDescriptor<CourseReminderSetting>()).map { setting in
-            let previous = (setting.courseKey, setting.isUnassociated, setting.sourceCourseTitle, setting.updatedAt)
+            let previous = (
+                setting.courseKey,
+                setting.isUnassociated,
+                setting.sourceCourseTitle,
+                setting.updatedAt,
+                setting.week
+            )
             return { context.insert(setting); setting.courseKey = previous.0; setting.isUnassociated = previous.1
-                setting.sourceCourseTitle = previous.2; setting.updatedAt = previous.3 }
+                setting.sourceCourseTitle = previous.2; setting.updatedAt = previous.3; setting.week = previous.4 }
         }
         return {
             for model in context.insertedModelsArray where !inserted.contains(ObjectIdentifier(model)) {
@@ -102,7 +108,7 @@ struct TimetableLocalDataReassociation {
             $0.id,
             ($0.occurrenceKey, $0.updatedAt)
         ) })
-        let reminderOrigins = Dictionary(uniqueKeysWithValues: reminders.map { ($0.id, ($0.courseKey, $0.updatedAt)) })
+        let reminderOrigins = Dictionary(uniqueKeysWithValues: reminders.map { ($0.id, ($0.scopeKey, $0.updatedAt)) })
         for note in notes where !note.isUnassociated {
             guard let old = oldCourses.first(where: { $0.stableCourseKey == note.courseKey }) else {
                 note.isUnassociated = !newCourses.contains { $0.stableCourseKey == note.courseKey }
@@ -159,22 +165,27 @@ struct TimetableLocalDataReassociation {
         }
         for setting in reminders where !setting.isUnassociated {
             guard let old = oldCourses.first(where: { $0.stableCourseKey == setting.courseKey }) else {
-                setting.isUnassociated = !newCourses.contains { $0.stableCourseKey == setting.courseKey }
+                setting.isUnassociated = !newCourses.contains { candidate in
+                    candidate.stableCourseKey == setting
+                        .courseKey && (setting.week.map { candidate.weeks.contains($0) } ?? true)
+                }
                 continue
             }
             setting.sourceCourseTitle = old.courseName
-            let matches = targets(for: old)
+            let matches = targets(for: old).filter { candidate in
+                setting.week.map { candidate.weeks.contains($0) } ?? true
+            }
             let keys = Array(Set(matches.map(\.stableCourseKey))).sorted {
                 if ($0 == old.stableCourseKey) != ($1 == old.stableCourseKey) { return $0 == old.stableCourseKey }
                 return $0 < $1
             }
-            guard !keys.isEmpty,
+            guard !keys.isEmpty, setting.week == nil || keys.count == 1,
                   keys
                       .allSatisfy({ key in
                           !reminders
                               .contains {
                                   $0.id != setting.id && !$0.isUnassociated && $0
-                                      .courseKey == key &&
+                                      .courseKey == key && $0.week == setting.week &&
                                       ($0.minutesBefore != setting.minutesBefore || $0.anchorPeriod != setting
                                           .anchorPeriod) } }) else {
                 setting.isUnassociated = true
@@ -182,18 +193,22 @@ struct TimetableLocalDataReassociation {
             }
             setting.updatedAt = max(
                 setting.updatedAt,
-                reminders.filter { keys.contains($0.courseKey) && !$0.isUnassociated }.map(\.updatedAt)
+                reminders.filter { keys.contains($0.courseKey) && $0.week == setting.week && !$0.isUnassociated }
+                    .map(\.updatedAt)
                     .max() ?? .distantPast
             )
-            for target in reminders where keys.contains(target.courseKey) && !target.isUnassociated {
+            for target in reminders
+                where keys.contains(target.courseKey) && target.week == setting.week && !target.isUnassociated {
                 target.updatedAt = setting.updatedAt
             }
             setting.courseKey = keys[0]
             let oldAnchor = setting.anchorPeriod
             for key in keys.dropFirst()
-                where !reminders.contains(where: { $0.courseKey == key && !$0.isUnassociated }) {
+                where !reminders
+                .contains(where: { $0.courseKey == key && $0.week == setting.week && !$0.isUnassociated }) {
                 context.insert(CourseReminderSetting(courseKey: key, minutesBefore: setting.minutesBefore,
-                                                     anchorPeriod: oldAnchor, updatedAt: setting.updatedAt))
+                                                     anchorPeriod: oldAnchor, week: setting.week,
+                                                     updatedAt: setting.updatedAt))
             }
         }
         for group in Dictionary(
@@ -222,10 +237,10 @@ struct TimetableLocalDataReassociation {
         }
         for group in Dictionary(
             grouping: try context.fetch(FetchDescriptor<CourseReminderSetting>()).filter { !$0.isUnassociated },
-            by: \.courseKey
+            by: \.scopeKey
         ).values {
             if Set(group.map { "\($0.minutesBefore):\($0.anchorPeriod ?? 0)" }).count == 1 {
-                let id = preferredID(group.map { ($0.id, $0.courseKey, $0.updatedAt) }, origins: reminderOrigins)
+                let id = preferredID(group.map { ($0.id, $0.scopeKey, $0.updatedAt) }, origins: reminderOrigins)
                 group.first { $0.id == id }?.updatedAt = group.map(\.updatedAt).max()!
                 for duplicate in group where duplicate.id != id { context.delete(duplicate) }
             }

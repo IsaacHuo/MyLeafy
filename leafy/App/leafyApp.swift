@@ -529,23 +529,19 @@ struct LeafyApp: App {
         let context = ModelContext(sharedModelContainer)
         do {
             let courses = try context.fetch(FetchDescriptor<Course>()).map(TimetableReminderRefreshPlan.courseSnapshot)
-            let currentCoursesByKey = Dictionary(
-                courses.map { ($0.stableCourseKey, $0) },
-                uniquingKeysWith: { first, _ in first }
-            )
             let courseSettings = try context.fetch(FetchDescriptor<CourseReminderSetting>())
                 .map { SyncedCourseReminderSetting($0).make() }
             let cellReminders = try context.fetch(FetchDescriptor<TimetableCellReminder>())
                 .map { SyncedTimetableCellReminder($0).make() }
             let events = try CustomScheduleStore.loadForSync()
-            for setting in courseSettings where !setting.isUnassociated && setting.minutesBefore > 0 {
-                try scope.check()
-                guard let course = currentCoursesByKey[setting.courseKey] else { continue }
-                try await TimetableNotificationManager.applyReminder(
-                    minutesBefore: setting.minutesBefore,
-                    anchorPeriod: setting.anchorPeriod,
-                    course: course
-                )
+            let coursePlan = try TimetableReminderRefreshPlan(
+                oldIdentifiers: Array(Set(courses
+                        .flatMap { TimetableNotificationManager.courseReminderIdentifiers(for: $0) })),
+                courses: courses, settings: courseSettings
+            )
+            if let warning = await coursePlan.restore(context: .settingsUpdate), scope.isCurrent {
+                TimetableCacheMetadata.lastFailureMessage = warning
+                logger.error("Localized course reminder refresh failed: \(warning, privacy: .public)")
             }
             for reminder in cellReminders where reminder.minutesBefore > 0 {
                 try scope.check()

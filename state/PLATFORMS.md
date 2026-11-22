@@ -1,5 +1,11 @@
 # 双端功能、验证与交付状态
 
+## iOS 导出 UI 与课次提醒（2026-11-22，独立分支待验收）
+
+[#89](https://github.com/IsaacHuo/MyLeafy/issues/89) 调整授权/目标日历按钮、并排内容多选和时间视图重复文字；课程提醒可选本次或全课，新增可选周次并联动 Widget、语言/学校刷新和 iCloud 载荷。旧记录保留课程默认，课次优先覆盖且可单独关闭。仅修改 iOS，未改 Android、VPN 或后端共享协议，版本保持 3.2.8 / build 1。
+
+任务 SwiftFormat/diff 和本地化检查通过；Xcode 27.1、arm64/iOS 17 无签名 build-for-testing 通过（App、Widget、分享扩展、测试目标）。新增 12 项回归涵盖范围隔离、刷新关联、旧库可选字段升级及旧 JSON 读取，仅编译未执行。未启动 Simulator、未执行 XCTest；真机通知、升级、权限与视觉待所有者验收，不自动合并或发布。
+
 ## iOS 3.2.8 图片保存与课表纠错（2026-11-22，待验收）
 
 独立分支 [#88](https://github.com/IsaacHuo/MyLeafy/issues/88) / [草稿 PR #87](https://github.com/IsaacHuo/MyLeafy/pull/87) 增加社区原文件保存、重叠教室排课及已发行关联键迁移；详情 2×2、时间设置顺序、启动横滑与 0.14 秒回到动画同步调整。iCloud 记录字段、SwiftData schema、Widget archive 和共享协议形状未改变。Android、VPN 和服务端本轮未修改，不将 iOS 证据扩大到其他端。

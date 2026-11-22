@@ -407,8 +407,13 @@ enum ICloudLocalData {
                     .contains(where: { $0.stableCourseKey == note.courseKey && $0.weeks.contains(note.week) }) {
                     note.isUnassociated = true }
             }
-            for setting in try context.fetch(FetchDescriptor<CourseReminderSetting>())
-                where !setting.isUnassociated && !keys.contains(setting.courseKey) { setting.isUnassociated = true }
+            for setting in try context.fetch(FetchDescriptor<CourseReminderSetting>()) where !setting.isUnassociated {
+                if !courses.contains(where: { course in
+                    course.stableCourseKey == setting.courseKey && (setting.week.map {
+                        (1 ... SemesterConfig.timetableWeekCapacity).contains($0) && course.weeks.contains($0)
+                    } ?? true)
+                }) { setting.isUnassociated = true }
+            }
             let changed = context.hasChanges
             if changed { try context.save() }
             return changed

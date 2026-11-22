@@ -426,7 +426,7 @@ struct TimetableTimeScopeView: View {
 
     private var timeScopeContent: some View {
         VStack(spacing: AppSpacing.card) {
-            header
+            if presentation == .standalone { header }
             monthCalendar
             yearStrip
             summaryCards

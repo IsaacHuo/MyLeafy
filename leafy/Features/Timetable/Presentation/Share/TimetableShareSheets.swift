@@ -15,6 +15,7 @@ struct TimetableExportSheet: View {
     let lastFailureMessage: String?
     let includesWeekendsByDefault: Bool
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
     @State private var calendarService = TimetableCalendarExportService()
@@ -153,38 +154,85 @@ struct TimetableExportSheet: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("导出内容").leafyBody()
-                ForEach(TimetableCalendarExportCategory.allCases) { category in
-                    Toggle(category.title, isOn: Binding(
-                        get: { selectedCategories.contains(category) },
-                        set: { selected in
-                            if selected { selectedCategories.insert(category) }
-                            else { selectedCategories.remove(category) }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("导出内容").leafyHeadline().foregroundStyle(AppTheme.primaryText)
+                    Spacer()
+                    Text("可多选").microCaption().foregroundStyle(AppTheme.secondaryText)
+                }
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+                layout {
+                    ForEach(TimetableCalendarExportCategory.allCases) { category in
+                        Toggle(isOn: Binding(
+                            get: { selectedCategories.contains(category) },
+                            set: { selected in
+                                if selected { selectedCategories.insert(category) }
+                                else { selectedCategories.remove(category) }
+                            }
+                        )) {
+                            VStack(spacing: 7) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: exportCategorySymbol(category)).font(.title3)
+                                    Image(systemName: selectedCategories
+                                        .contains(category) ? "checkmark.circle.fill" : "circle")
+                                        .font(.caption)
+                                }
+                                Text(category.title).font(.subheadline.weight(.semibold))
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 56)
                         }
-                    ))
+                        .toggleStyle(.button)
+                        .buttonStyle(.bordered)
+                        .tint(AppTheme.accent)
+                        .frame(maxWidth: .infinity)
+                    }
                 }
             }
             .disabled(isExportingCalendar || isClearingCalendar)
 
             if calendarDestinations.isEmpty {
-                Button {
-                    Task { await loadCalendarDestinations(requestAccess: true) }
-                } label: {
-                    HStack {
-                        Label("选择目标日历", systemImage: "calendar")
-                        Spacer()
-                        if isLoadingCalendars { ProgressView() }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("允许访问日历后，可选择导出位置并更新已导出的课表。")
+                        .microCaption().foregroundStyle(AppTheme.secondaryText)
+                    Button {
+                        Task { await loadCalendarDestinations(requestAccess: true) }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isLoadingCalendars { ProgressView() }
+                            Label("授权日历访问", systemImage: "calendar.badge.checkmark")
+                        }
+                        .leafyBody()
+                        .frame(maxWidth: .infinity, minHeight: 32)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.accent)
+                    .disabled(isLoadingCalendars || isExportingCalendar || isClearingCalendar)
                 }
-                .disabled(isLoadingCalendars || isExportingCalendar || isClearingCalendar)
             } else {
-                Picker("目标日历", selection: $selectedCalendarID) {
-                    ForEach(calendarDestinations) { destination in
-                        Text(destination.displayTitle).tag(Optional(destination.id))
+                Menu {
+                    Picker("目标日历", selection: $selectedCalendarID) {
+                        ForEach(calendarDestinations) { destination in
+                            Text(destination.displayTitle).tag(Optional(destination.id))
+                        }
                     }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "calendar")
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("目标日历").microCaption().foregroundStyle(AppTheme.secondaryText)
+                            Text(calendarDestinations.first { $0.id == selectedCalendarID }?.displayTitle
+                                ?? L10n.text("选择目标日历"))
+                                .leafyBody().foregroundStyle(AppTheme.primaryText)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.up.chevron.down").font(.caption.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .pickerStyle(.menu)
+                .buttonStyle(.bordered)
+                .tint(AppTheme.accent)
                 .disabled(isExportingCalendar || isClearingCalendar)
             }
 
@@ -243,6 +291,14 @@ struct TimetableExportSheet: View {
         }
         .padding(18)
         .leafyCardStyle()
+    }
+
+    private func exportCategorySymbol(_ category: TimetableCalendarExportCategory) -> String {
+        switch category {
+        case .courses: return "books.vertical"
+        case .exams: return "doc.text"
+        case .schedules: return "calendar"
+        }
     }
 
     private var customWeekRangeControls: some View {

@@ -1362,7 +1362,7 @@ struct CustomScheduleEditorSheet: View {
 }
 
 struct CourseDetailSheet: View {
-    private enum NoteScope: String, CaseIterable, Identifiable {
+    private enum EditScope: String, CaseIterable, Identifiable {
         case occurrence
         case course
 
@@ -1392,7 +1392,9 @@ struct CourseDetailSheet: View {
     @Query private var reminderSettings: [CourseReminderSetting]
 
     @State private var noteText = ""
-    @State private var selectedNoteScope: NoteScope = .occurrence
+    @State private var selectedNoteScope: EditScope = .occurrence
+    @State private var selectedReminderScope: EditScope = .occurrence
+    @State private var isSavingReminder = false
     @State private var selectedReminderOption: TimetableReminderOption = .none
     @State private var customReminderMinutes = 20
     @State private var selectedReminderAnchorPeriod: Int?
@@ -1443,6 +1445,14 @@ struct CourseDetailSheet: View {
                         Text("课前提醒")
                             .leafyHeadline()
 
+                        Picker("提醒范围", selection: $selectedReminderScope) {
+                            ForEach(EditScope.allCases) { scope in
+                                Text(scope.title).tag(scope)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: selectedReminderScope) { _, _ in syncReminderStateForSelectedScope() }
+
                         TimetableReminderOptionPicker(
                             selectedOption: $selectedReminderOption,
                             customMinutes: $customReminderMinutes
@@ -1460,26 +1470,32 @@ struct CourseDetailSheet: View {
                         Button {
                             Task { await saveReminder() }
                         } label: {
-                            Label("应用提醒", systemImage: "bell")
-                                .leafyBody()
-                                .frame(maxWidth: .infinity)
+                            HStack {
+                                Label("应用提醒", systemImage: "bell")
+                                if isSavingReminder { ProgressView() }
+                            }
+                            .leafyBody()
+                            .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
                         .tint(AppTheme.accent(for: themeColorPreference))
 
-                        Text("提醒只保存在本机，会为这门课尚未开始的周次创建本地通知。")
+                        Text(selectedReminderScope == .occurrence
+                            ? "只调整这一次课，其他课次不变。"
+                            : "作为这门课的默认提醒，已单独设置的课次不变。")
                             .microCaption()
                             .foregroundStyle(AppTheme.secondaryText)
                     }
                     .padding(18)
                     .leafyCardStyle()
+                    .disabled(isSavingReminder)
 
                     VStack(alignment: .leading, spacing: 12) {
                         Text("课程备注")
                             .leafyHeadline()
 
                         Picker("备注范围", selection: $selectedNoteScope) {
-                            ForEach(NoteScope.allCases) { scope in
+                            ForEach(EditScope.allCases) { scope in
                                 Text(scope.title).tag(scope)
                             }
                         }
@@ -1613,7 +1629,14 @@ struct CourseDetailSheet: View {
     }
 
     private var reminderRecord: CourseReminderSetting? {
-        reminderSettings.first { !$0.isUnassociated && $0.courseKey == courseKey }
+        if selectedReminderScope == .occurrence {
+            return CourseReminderResolver.effective(
+                courseKey: courseKey,
+                week: context.week,
+                settings: reminderSettings
+            )
+        }
+        return CourseReminderResolver.record(courseKey: courseKey, week: nil, settings: reminderSettings)
     }
 
     private var reminderAnchorPeriods: [Int] {
@@ -1644,6 +1667,15 @@ struct CourseDetailSheet: View {
             selectedNoteScope = .occurrence
         }
         syncNoteTextForSelectedScope()
+        if CourseReminderResolver.record(courseKey: courseKey, week: context.week, settings: reminderSettings) != nil {
+            selectedReminderScope = .occurrence
+        } else if CourseReminderResolver.record(courseKey: courseKey, week: nil, settings: reminderSettings) != nil {
+            selectedReminderScope = .course
+        } else { selectedReminderScope = .occurrence }
+        syncReminderStateForSelectedScope()
+    }
+
+    private func syncReminderStateForSelectedScope() {
         let minutes = reminderRecord?.minutesBefore ?? 0
         selectedReminderOption = TimetableReminderOption.option(for: minutes)
         customReminderMinutes = TimetableReminderOption.customMinutes(for: minutes)
@@ -1714,14 +1746,25 @@ struct CourseDetailSheet: View {
 
     @MainActor
     private func saveReminder() async {
+        guard !isSavingReminder else { return }
+        isSavingReminder = true
+        defer { isSavingReminder = false }
         let scope = CampusOperationScope()
+        let selectedWeek = selectedReminderScope == .occurrence ? context.week : nil
         let reminderMinutes = selectedReminderOption.minutes(customMinutes: customReminderMinutes)
         let anchorPeriod = TimetableNotificationManager.resolvedAnchorPeriod(selectedReminderAnchorPeriod, for: course)
         let snapshot = TimetableReminderRefreshPlan.courseSnapshot(course)
+        let plan: TimetableReminderRefreshPlan
         do {
             try requireCurrentCourse()
             try TimetableLocalEdits.setReminder(
-                courseKey: courseKey, minutesBefore: reminderMinutes, anchorPeriod: anchorPeriod, in: modelContext
+                courseKey: courseKey, minutesBefore: reminderMinutes, anchorPeriod: anchorPeriod,
+                week: selectedWeek, in: modelContext
+            )
+            plan = try TimetableReminderRefreshPlan(
+                oldIdentifiers: TimetableNotificationManager.courseReminderIdentifiers(for: snapshot),
+                courses: [snapshot],
+                settings: modelContext.fetch(FetchDescriptor<CourseReminderSetting>())
             )
         } catch {
             operationAlert = .failure(error.localizedDescription)
@@ -1733,13 +1776,21 @@ struct CourseDetailSheet: View {
         )
         do {
             try scope.check()
-            try await TimetableNotificationManager.applyReminder(
-                minutesBefore: reminderMinutes, anchorPeriod: anchorPeriod, course: snapshot
-            )
+            if reminderMinutes > 0 { try await TimetableNotificationManager.requestReminderAuthorization() }
             try scope.check()
-            operationAlert = .success(reminderMinutes == 0
-                ? L10n.text("已关闭这门课的提醒。", language: leafyLanguage)
-                : L10n.text("提醒已设置。", language: leafyLanguage))
+            if let warning = await plan.restore(context: .settingsUpdate) {
+                guard scope.isCurrent else { return }
+                operationAlert = .failure(warning)
+                return
+            }
+            try scope.check()
+            let disabledMessage = selectedWeek == nil
+                ? L10n.text("已关闭这门课的默认提醒。", language: leafyLanguage)
+                : L10n.text("已关闭本次课的提醒。", language: leafyLanguage)
+            operationAlert = .success(reminderMinutes == 0 ? disabledMessage : L10n.text(
+                "提醒已设置。",
+                language: leafyLanguage
+            ))
         } catch {
             guard !scope.wasCancelled(error) else { return }
             operationAlert = .failure(L10n.text(

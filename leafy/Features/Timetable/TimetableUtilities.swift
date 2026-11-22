@@ -735,6 +735,10 @@ enum TimetableNotificationManager {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
     }
 
+    static func requestReminderAuthorization() async throws {
+        _ = try await authorizedNotificationCenter()
+    }
+
     private static func authorizedNotificationCenter() async throws -> UNUserNotificationCenter {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()

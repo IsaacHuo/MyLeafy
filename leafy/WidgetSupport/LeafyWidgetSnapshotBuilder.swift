@@ -74,10 +74,7 @@ enum LeafyWidgetSnapshotBuilder {
         let configs = [SemesterConfig.current]
         let notesByKey = TimetableNoteResolver.courseNotesByKey(notes)
         let occurrenceNotesByKey = TimetableNoteResolver.occurrenceNotesByKey(occurrenceNotes)
-        let remindersByKey = Dictionary(
-            reminders.filter { !$0.isUnassociated }.map { ($0.courseKey, $0.minutesBefore) },
-            uniquingKeysWith: { _, latest in latest }
-        )
+        let remindersByKey = Dictionary(grouping: reminders.filter { !$0.isUnassociated }, by: \.courseKey)
         var items: [LeafyWidgetAgendaItem] = []
         if isAuthenticated {
             for course in courses {
@@ -94,7 +91,12 @@ enum LeafyWidgetSnapshotBuilder {
                         dayOfWeek: course.dayOfWeek, period: last
                     ), end > start else { continue }
                     let minutes = TimetableNotificationManager
-                        .normalizedReminderMinutes(remindersByKey[course.stableCourseKey] ?? 0)
+                        .normalizedReminderMinutes(CourseReminderResolver.effective(courseKey: course.stableCourseKey,
+                                                                                    week: week,
+                                                                                    settings: remindersByKey[course
+                                                                                        .stableCourseKey] ?? [])?
+                                                                                                                    .minutesBefore ??
+                                                                                                                    0)
                     items.append(LeafyWidgetAgendaItem(
                         id: "course-\(course.id.uuidString)-\(week)", kind: .course,
                         sourceID: course.id.uuidString, title: trimmed(course.courseName) ?? L10n.text("未命名课程"),

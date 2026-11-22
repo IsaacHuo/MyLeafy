@@ -2528,15 +2528,10 @@ private struct TimetableWeekPickerPanel: View {
                             .leafyCardStyle()
                     }
 
-                    VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                        Text("年度视图")
-                            .leafyHeadline()
-
-                        TimetableTimeScopeView(
-                            snapshot: overviewSnapshot,
-                            presentation: .embedded
-                        )
-                    }
+                    TimetableTimeScopeView(
+                        snapshot: overviewSnapshot,
+                        presentation: .embedded
+                    )
                 }
                 .padding(AppSpacing.page)
             }
