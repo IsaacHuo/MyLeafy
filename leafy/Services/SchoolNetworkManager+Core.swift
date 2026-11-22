@@ -256,6 +256,7 @@ extension SchoolNetworkManager {
         authenticatedDisplayName = (trimmedDisplayName?.isEmpty == false) ? trimmedDisplayName : trimmedEduID
         if connectionMode == .serverVPN {
             // Publish the verified local identity without copying this transport's school session into direct access.
+            Self.shared.currentPortal = currentPortal
             Self.shared.authenticatedEduID = authenticatedEduID
             Self.shared.authenticatedDisplayName = authenticatedDisplayName
         }
