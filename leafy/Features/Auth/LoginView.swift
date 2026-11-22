@@ -9,7 +9,12 @@ struct LoginView: View {
     @Environment(\.leafyFontScale) private var leafyFontScale
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var schoolNetworkManager = ActiveCampusContext.networkManager
+    @ObservedObject private var localIdentity = ActiveCampusContext.networkManager
+    @ObservedObject private var vpnSettings = SchoolVPNSettingsStore.shared
+    @State private var showingConnectionSettings = false
+    private var schoolNetworkManager: SchoolNetworkManager {
+        SchoolTimetableConnection.shared.manager(portal: selectedPortal)
+    }
     @StateObject private var networkPathObserver = LoginNetworkPathObserver()
     private let fieldHeight: CGFloat = 54
     private let buttonHeight: CGFloat = 56
@@ -105,6 +110,15 @@ struct LoginView: View {
                         }
 
                         if !isGuestCampusSelected {
+                            if !isCustomCampusSelected, selectedPortal == .undergraduate {
+                                Button(vpnSettings
+                                    .isEnabled(for: ActiveCampusContext.identity) ? "教务连接：北林 VPN" : "非校园网登录？配置北林 VPN") {
+                                        cancelAuthenticationTasks()
+                                        SchoolTimetableConnection.shared.cancel()
+                                        showingConnectionSettings = true
+                                    }
+                                    .frame(maxWidth: 360)
+                            }
                             loginForm
                                 .frame(maxWidth: 360)
 
@@ -132,6 +146,14 @@ struct LoginView: View {
                 }
             }
             .background(LeafyPageBackground())
+            .sheet(isPresented: $showingConnectionSettings, onDismiss: { startCaptchaLoad() }) {
+                NavigationStack {
+                    SchoolAcademicConnectionSettingsView(identity: ActiveCampusContext.identity)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("取消") { showingConnectionSettings = false } } }
+                }
+            }
             .leafyLoginNavigationChrome()
             .task {
                 if !isCustomCampusSelected, !isGuestCampusSelected {
@@ -150,6 +172,7 @@ struct LoginView: View {
             .onChange(of: selectedPortal) { _, newValue in
                 guard !isCustomCampusSelected, !isGuestCampusSelected else { return }
                 cancelAuthenticationTasks()
+                SchoolTimetableConnection.shared.cancel()
                 schoolNetworkManager.currentPortal = newValue
                 restoreSchoolCredential(for: newValue)
                 startCaptchaLoad()
@@ -166,6 +189,7 @@ struct LoginView: View {
             }
             .onDisappear {
                 cancelAuthenticationTasks()
+                if !showingConnectionSettings { SchoolTimetableConnection.shared.cancel() }
                 customSignUpCodeCooldownTask?.cancel()
                 customSignUpCodeCooldownTask = nil
             }
@@ -734,6 +758,7 @@ struct LoginView: View {
 
     @MainActor
     private func fetchCaptcha(automatic: Bool) async {
+        if automatic, vpnSettings.isEnabled(for: ActiveCampusContext.identity) { return }
         guard !isLoggingIn, !isCaptchaLoading else { return }
         if automatic, !shouldAutomaticallyRefreshCaptcha {
             return
@@ -772,7 +797,9 @@ struct LoginView: View {
                 return
             }
 
-            if case SchoolNetworkError.loginUnavailable(let message) = error {
+            if let failure = error as? AcademicConnectorFailure {
+                captchaLoadMessage = failure.localizedDescription
+            } else if case SchoolNetworkError.loginUnavailable(let message) = error {
                 captchaLoadMessage = L10n.text(message, language: leafyLanguage)
             } else {
                 captchaLoadMessage = portal == .graduate

@@ -167,6 +167,7 @@ flowchart TB
 ### `leafy/Services/`
 
 - `SchoolNetworkManager.swift` + `+Core/+Auth/+Timetable/+Discover.swift`：强智登录、Cookie 管理、教务请求、页面识别、会话失效。
+- `AcademicConnection/`（任务分支）：仅北林本科登录/课表按配置优先使用独立教务连接器，直接访问保留原 manager；VPN/直连 Cookie 分桶，凭据由设备 Keychain 或一次操作内存持有。连接器不读取社区数据库、不改变宿主机路由，协议见 `contracts/academic-connector`。
 - `SchoolAuthenticationService` / `SchoolReauthentication`：用户主动教务操作的 Session-first 恢复协调；本科最多执行三轮“刷新验证码 → 三路端侧 Vision 共识 → 登录验证”，只对 OCR 不可靠或明确验证码错误继续，研究生与最终失败进入人工验证，校园网不可达只提示连接后重试。
 - `AcademicOperationProgress`：页面局部的用户主动教务操作进度；记录已完成、进行中和失败步骤，认证层与具体数据用例通过 MainActor reporter 汇入，同一模型不用于后台预取。
 - `SchoolDataSyncService` / `SchoolDataPrefetchCoordinator`：教务数据同步与预取。

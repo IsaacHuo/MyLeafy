@@ -78,11 +78,29 @@
 }
 api.myleafy.space, downloads.myleafy.space {
   import monitoring production
-  import api_proxy 3100
+  @academic path /v1/academic /v1/academic/*
+  handle @academic {
+    request_body {
+      max_size 3MB
+    }
+    import api_proxy 3130
+  }
+  handle {
+    import api_proxy 3100
+  }
 }
 api-staging.myleafy.space, downloads-staging.myleafy.space {
   import monitoring staging
-  import api_proxy 3101
+  @academic path /v1/academic /v1/academic/*
+  handle @academic {
+    request_body {
+      max_size 3MB
+    }
+    import api_proxy 3131
+  }
+  handle {
+    import api_proxy 3101
+  }
 }
 myleafy.space {
   import monitoring production

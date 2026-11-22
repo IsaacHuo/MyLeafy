@@ -6,7 +6,7 @@ Last verified: 2026-10-23 (Android three-tab/parity batch verified on API 36 emu
 
 ## Current Focus
 
-- **北林非校园网教务同步（2026-11-10，接入验证）**：ECS 通过学校官方 HTTPS 网页 VPN 完成本人 VPN 认证、强智登录及 `2026-2027-1` 课表页面读取，POST 退出得到明确成功；最终教务验证码使用人工核对，不能记为自动识别通过。未采用严格证书验证失败的用户态隧道候选，不改宿主机路由。生产连接器、双端设置/登录/刷新、手机会话复用、多学生隔离和发行尚未完成；见 [设计与证据](../docs/design/bjfu-academic-vpn-sync.md)、[#79](https://github.com/IsaacHuo/MyLeafy/issues/79) / [#80](https://github.com/IsaacHuo/MyLeafy/issues/80)。
+- **北林非校园网教务同步（2026-11-10，接入验证）**：ECS 通过学校官方 HTTPS 网页 VPN 完成本人 VPN 认证、强智登录及 `2026-2027-1` 课表页面读取，POST 退出得到明确成功；最终教务验证码使用人工核对，不能记为自动识别通过。未采用严格证书验证失败的用户态隧道候选，不改宿主机路由。2026-11-22 恢复任务，仅实施 iOS 与必要后端，Android 延后；任务分支已接入独立连接器及本科设置/登录/课表手动刷新，连接器 132 项后端测试和 iOS 测试包编译通过。当前提交 CI、XCTest 执行、手机 Cookie 复用、多学生真实会话、staging、真机与发行仍待验收；见 [设计与证据](../docs/design/bjfu-academic-vpn-sync.md)、[#79](https://github.com/IsaacHuo/MyLeafy/issues/79) / [#80](https://github.com/IsaacHuo/MyLeafy/issues/80)。
 
 - **Admin Android 版本入口（2026-11-07，生产已验收）**：Refine 侧栏补回「业务管理 → Android 版本」，继续使用 `/admin/android-releases` 独立页面和原有权限；运营/只读可查看，只有超级管理员可发布、重试和撤回。生产与 staging 均运行 `831ab3f15f6af89d1805538b9a9c4dac04ac3526`；完整 staging 42336454110、所有者批准的 production 42337279249 均成功，复用同一产物。网站 74 项单元和 33 项相关浏览器用例通过，所有者确认菜单和版本列表正常；原 Android 1.2.9 元数据、摘要和 Range 下载保持。未修改 APK、接口或数据库，见 [交付记录](../docs/operations/admin-monitoring-delivery.md) / [#77](https://github.com/IsaacHuo/MyLeafy/issues/77)。
 

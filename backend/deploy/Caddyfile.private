@@ -1,6 +1,17 @@
 # Before filing: loopback only. Use Workbench TCP forwarding / SSH forwarding.
 http://127.0.0.1:8081 {
   bind 127.0.0.1
+  @academic path /v1/academic /v1/academic/*
+  handle @academic {
+    request_body {
+      max_size 3MB
+    }
+    reverse_proxy 127.0.0.1:3131 {
+      header_up X-Real-IP {remote_host}
+      header_up -CF-Connecting-IP
+      header_up -X-Leafy-Client-IP
+    }
+  }
   @api path /v1/* /health
   handle @api {
     reverse_proxy 127.0.0.1:3101 {

@@ -24,7 +24,8 @@ extension SchoolNetworkManager {
     }
 
     func isSchoolURL(_ url: URL) -> Bool {
-        [baseURL, graduateBaseURL].contains { base in
+        if connectionMode == .serverVPN, AcademicSchoolURL.original(url) != nil { return true }
+        return [baseURL, graduateBaseURL].contains { base in
             guard let expected = URL(string: base) else { return false }
             return url.scheme?.lowercased() == expected.scheme?.lowercased()
                 && url.host?.lowercased() == expected.host?.lowercased()
@@ -94,7 +95,8 @@ extension SchoolNetworkManager {
     }
 
     func makeRequest(url: URL, method: String = "GET") -> URLRequest {
-        var request = URLRequest(url: url)
+        let original = connectionMode == .serverVPN ? AcademicSchoolURL.original(url) ?? url : url
+        var request = URLRequest(url: original)
         request.httpMethod = method
         request.httpShouldHandleCookies = true
         request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -206,6 +208,12 @@ extension SchoolNetworkManager {
         }
     }
 
+    func replaceTransportCookies(_ cookies: [String: String]) {
+        session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
+        persistedCookieValues = cookies
+        if let url = URL(string: baseURL) { syncPersistedCookiesToStorage(for: url) }
+    }
+
     func persistAuthenticatedIdentity(eduID: String, displayName: String? = nil) {
         let trimmedEduID = eduID.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDisplayName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -220,8 +228,9 @@ extension SchoolNetworkManager {
                 displayName: (trimmedDisplayName?.isEmpty == false) ? trimmedDisplayName : trimmedEduID,
                 portal: currentPortal
             )
+            academicConnection?.activateVerifiedIdentity(identity)
             if ActiveCampusContext.identity?.scopeKey != identity.scopeKey {
-                cancelInFlightRequests()
+                cancelInFlightRequests(preservingAcademicConnection: true)
                 SchoolDataPrefetchCoordinator.shared.cancel()
             }
             CampusIdentityStore.activate(identity)
@@ -237,6 +246,11 @@ extension SchoolNetworkManager {
 
         authenticatedEduID = trimmedEduID.isEmpty ? nil : trimmedEduID
         authenticatedDisplayName = (trimmedDisplayName?.isEmpty == false) ? trimmedDisplayName : trimmedEduID
+        if connectionMode == .serverVPN {
+            // Publish the verified local identity without copying this transport's school session into direct access.
+            Self.shared.authenticatedEduID = authenticatedEduID
+            Self.shared.authenticatedDisplayName = authenticatedDisplayName
+        }
     }
 
     @MainActor
@@ -269,6 +283,7 @@ extension SchoolNetworkManager {
     }
 
     func clearSession() {
+        SchoolTimetableConnection.shared.cancel()
         cancelInFlightRequests()
         SchoolDataPrefetchCoordinator.shared.cancel()
         clearPersistedCookies()
@@ -282,11 +297,13 @@ extension SchoolNetworkManager {
         clearDebugSnapshots()
     }
 
-    func cancelInFlightRequests() {
+    func cancelInFlightRequests(preservingAcademicConnection: Bool = false) {
+        if !preservingAcademicConnection { timetableFetchTask?.cancel() }
         authenticationOperationID = nil
         sessionGeneration &+= 1
         session.invalidateAndCancel()
         session = Self.makeSession()
+        if !preservingAcademicConnection { academicConnection?.cancel() }
     }
 
     func cookieDebugSummary(for url: URL?) -> String {
@@ -321,7 +338,7 @@ extension SchoolNetworkManager {
 
     @discardableResult
     func persistDebugHTML(_ html: String, filename: String) -> URL? {
-        guard allowsDebugSnapshots else { return nil }
+        guard connectionMode == .campusDirect, allowsDebugSnapshots else { return nil }
         guard let directory = debugDirectory() else { return nil }
         let url = directory.appendingPathComponent(filename)
         do {
