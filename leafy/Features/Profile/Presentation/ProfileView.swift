@@ -1936,7 +1936,7 @@ private struct CacheAndSyncView: View {
     @ObservedObject private var vpnSettings = SchoolVPNSettingsStore.shared
     @State private var refreshConnectionMode: SchoolConnectionMode?
     @State private var vpnFailure: String?
-    private var usesVPN: Bool { vpnSettings.isEnabled(for: ActiveCampusContext.identity) }
+    private var usesVPN: Bool { !ReviewDemoMode.isEnabled && vpnSettings.isEnabled(for: ActiveCampusContext.identity) }
     private var networkManager: SchoolNetworkManager {
         SchoolTimetableConnection.shared.manager(
             mode: refreshConnectionMode,
@@ -1952,7 +1952,7 @@ private struct CacheAndSyncView: View {
 
     var body: some View {
         List {
-            if ActiveCampusContext.identity?.campusID == .bjfu,
+            if !ReviewDemoMode.isEnabled, ActiveCampusContext.identity?.campusID == .bjfu,
                ActiveCampusContext.identity?.portal == .undergraduate {
                 Section {
                     NavigationLink {

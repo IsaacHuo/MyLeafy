@@ -65,6 +65,10 @@ struct SchoolAcademicConnectionSettingsView: View {
     }
 
     private func save() {
+        guard !ReviewDemoMode.isEnabled else {
+            message = "请退出演示模式后，再配置北林 VPN。"
+            return
+        }
         guard identity?.scopeKey == ActiveCampusContext.identity?.scopeKey else {
             message = "当前账号已变化，请重新打开教务连接设置。"
             return

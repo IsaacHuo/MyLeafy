@@ -229,7 +229,7 @@ extension SchoolNetworkManager {
                 portal: currentPortal
             )
             if let academicConnection { academicConnection.activateVerifiedIdentity(identity) }
-            else if currentPortal == .undergraduate {
+            else if currentPortal == .undergraduate, !ReviewDemoMode.isEnabled {
                 // A first-login direct fallback still binds the explicitly configured VPN to its verified owner.
                 do { try SchoolVPNSettingsStore.shared.bindPendingLogin(to: identity) }
                 catch {
