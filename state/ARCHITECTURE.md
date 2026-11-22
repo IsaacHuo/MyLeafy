@@ -433,7 +433,7 @@ Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 2
 
 基础检查为仓库安全/分层/diff、CI 规则、SwiftFormat 0.64.1 与项目配置、Spotless 8.10.4 / ktlint 1.8.0、TypeScript 类型/客户端契约、Deno 静态检查；全部只读。日常不编译客户端，不启动 XCTest、模拟器、Roborazzi、Playwright、数据库容器或部署。平台 reusable workflows 的布尔输入 `full` 默认为 false；`.github/workflows/full-validation.yml` 只手动按平台或 all（默认）以事件 SHA 调用 full=true，汇总为独立 Full validation result，不加入日常合入门禁，不安排夜间运行。完整验证保留原编译、回归及诊断。iOS 固定 Xcode 27.1 / iOS 17 最低目标，统一 DerivedData 和编译参数，build-for-testing 后 test-without-building，避免重复编译。
 
-ECS 的 **Prepare or publish accepted ECS version** 仅手动执行，核对 main 祖先提交及该精确提交的 `CI result`。staging 完成后端/网站/浏览器完整验证，再校验归档与文件摘要、迁移数据库和切换 current；production 消费成功 staging 的同一压缩包并保留所有者 Environment 审批。部署按环境串行；失败不自动回退数据库。网站 `/release.json` 与 API `/health` 显示相同环境和源码。
+ECS 的 **Prepare or publish accepted ECS version** 仅手动执行，核对 main 祖先提交及该精确提交的 `CI result`。staging 完成后端/网站/浏览器完整验证并保存归档后才传输。可由操作者预上传同一 SHA-256 的归档，安装器仍校验归档与文件摘要、迁移数据库和切换 current。production 消费成功 staging 的同一压缩包并保留所有者 Environment 审批。部署按环境串行；失败不自动回退数据库。网站 `/release.json` 与 API `/health` 显示相同环境和源码。
 
 同域发行代理读取当前环境的内部 API，staging 不回退生产。签名媒体和公开 APK 的授权边界、大小/哈希与 Range 保留；迁移后自动备份和下载恢复已验收。旧 Cloudflare 流程已停用，原版本/数据库仅作受保护保留资源，不能与 ECS 同时接受业务写入。
 

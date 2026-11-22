@@ -17,6 +17,10 @@ on:
         description: I have accepted staging and completed filing (production only)
         type: boolean
         default: false
+      preloaded:
+        description: Use the checked archive already uploaded to ECS
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -58,15 +62,11 @@ jobs:
           github-token: ${{ github.token }}
       - if: inputs.environment == 'production'
         run: jq -e --arg sha '${{ inputs.commit }}' '.environment == "staging" and .commit == $sha and .success == true' acceptance/deployment.json
-  publish:
+  package:
     needs: review
+    if: inputs.environment == 'staging'
     runs-on: ubuntu-24.04
-    environment: ${{ inputs.environment }}
     timeout-minutes: 45
-    env:
-      RELEASE_COMMIT: ${{ inputs.commit }}
-      TARGET: ${{ inputs.environment }}
-      ECS_INSTANCE: i-2ze251tg6q9u5s25jkq4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,7 +79,6 @@ jobs:
             backend/package-lock.json
             site/package-lock.json
       - name: Validate and package staging source
-        if: inputs.environment == 'staging'
         run: |
           npm --prefix backend ci
           npm --prefix site ci
@@ -97,12 +96,32 @@ jobs:
           npm run test:e2e
           cd ..
           node backend/scripts/ecs/package.mjs package-output
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ecs-package-${{ inputs.commit }}
+          path: package-output/myleafy-*.tar.gz*
+          if-no-files-found: error
+          retention-days: 30
+  publish:
+    needs: [review, package]
+    if: ${{ !cancelled() && needs.review.result == 'success' && (needs.package.result == 'success' || (inputs.environment == 'production' && needs.package.result == 'skipped')) }}
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 45
+    env:
+      RELEASE_COMMIT: ${{ inputs.commit }}
+      TARGET: ${{ inputs.environment }}
+      PRELOADED: ${{ inputs.preloaded }}
+      ECS_INSTANCE: i-2ze251tg6q9u5s25jkq4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
       - uses: actions/download-artifact@v4
-        if: inputs.environment == 'production'
         with:
           name: ecs-package-${{ inputs.commit }}
           path: package-output
-          run-id: ${{ inputs.staging_run }}
+          run-id: ${{ inputs.environment == 'staging' && github.run_id || inputs.staging_run }}
           github-token: ${{ github.token }}
       - name: Configure dedicated Workbench credentials
         env:
@@ -125,23 +144,24 @@ jobs:
         run: |
           archive="package-output/myleafy-${RELEASE_COMMIT}.tar.gz"
           hash=$(cat "$archive.sha256")
-          remote="/var/tmp/myleafy-${GITHUB_RUN_ID}.tar.gz"
-          python3 backend/scripts/ecs/workbench-safe.py exec -i "$ECS_INSTANCE" -r cn-beijing -c "test ! -e '$remote'" -o json
-          python3 backend/scripts/ecs/workbench-safe.py upload "$archive" "$remote" -i "$ECS_INSTANCE" -r cn-beijing
+          [[ "$hash" =~ ^[a-f0-9]{64}$ ]]
+          if [[ "$PRELOADED" == true ]]; then
+            remote="/var/tmp/myleafy-${hash}.tar.gz"
+            echo "Expected preloaded archive: $remote"
+            python3 backend/scripts/ecs/workbench-safe.py exec -i "$ECS_INSTANCE" -r cn-beijing -c "test -n \"\$(find '$remote' -maxdepth 0 -type f -uid 0 ! -perm /022 -print)\"" -o json
+          else
+            remote="/var/tmp/myleafy-${GITHUB_RUN_ID}.tar.gz"
+            python3 backend/scripts/ecs/workbench-safe.py exec -i "$ECS_INSTANCE" -r cn-beijing -c "test ! -e '$remote'" -o json
+            python3 backend/scripts/ecs/workbench-safe.py upload "$archive" "$remote" -i "$ECS_INSTANCE" -r cn-beijing
+          fi
           # Bootstrap and protected per-environment configuration are owner-operated.
           python3 backend/scripts/ecs/workbench-safe.py exec -i "$ECS_INSTANCE" -r cn-beijing --timeout 600 -c "MYLEAFY_PRODUCTION_ACCEPTED='$RELEASE_COMMIT' bash /opt/myleafy/install-release.sh '$TARGET' '$RELEASE_COMMIT' '$remote' '$hash'" -o json
           if [[ "$TARGET" == staging ]]; then
             python3 backend/scripts/ecs/workbench-safe.py exec -i "$ECS_INSTANCE" -r cn-beijing --timeout 120 -c "cd /opt/myleafy/staging/current/backend && /usr/local/bin/node --env-file=/etc/myleafy/staging.env scripts/staging-smoke.mjs" -o json
           fi
           mkdir -p deployment-report
-          python3 backend/scripts/ecs/workbench-safe.py download "/opt/myleafy/$TARGET/deployment.json" deployment-report/deployment.json -i "$ECS_INSTANCE" -r cn-beijing
-      - uses: actions/upload-artifact@v4
-        if: inputs.environment == 'staging'
-        with:
-          name: ecs-package-${{ inputs.commit }}
-          path: package-output/myleafy-*.tar.gz*
-          if-no-files-found: error
-          retention-days: 30
+          python3 backend/scripts/ecs/workbench-safe.py exec -i "$ECS_INSTANCE" -r cn-beijing -c "cat '/opt/myleafy/$TARGET/deployment.json'" -o json |
+            jq -e --arg target "$TARGET" --arg sha "$RELEASE_COMMIT" '.output | fromjson | select(.environment == $target and .commit == $sha and .success == true)' > deployment-report/deployment.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
