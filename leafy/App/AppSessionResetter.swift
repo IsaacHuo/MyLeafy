@@ -70,6 +70,9 @@ enum AppSessionResetter {
         attempt("教务登录凭据") {
             try SchoolLoginCredentialStore.deleteAll()
         }
+        SchoolTimetableConnection.shared.cancel()
+        attempt("VPN 凭据") { try SchoolVPNSettingsStore.shared.removeAll() }
+        attempt("教务登录态") { try SchoolSessionCredentialStore.deleteAll() }
         CommunityPostCardGenerator.cleanupStaleRenderedFiles()
 
         SchoolDataCache.clearDiscoverCaches()

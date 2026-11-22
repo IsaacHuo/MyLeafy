@@ -16,6 +16,7 @@ enum AppLifecycleCoordinator {
     private static func suspendInFlightWork() {
         SchoolDataPrefetchCoordinator.shared.cancel()
         ActiveCampusContext.networkManager.cancelInFlightRequests()
+        SchoolTimetableConnection.shared.cancel()
         CommunitySessionManager.shared.cancelInFlightWork()
         Task {
             try? await MyLeafyBackendEnvironment.client().cancelSessionEstablishment()

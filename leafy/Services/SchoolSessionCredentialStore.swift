@@ -6,8 +6,9 @@ nonisolated enum SchoolSessionCredentialStore {
     private static let service = "com.myleafy.school-session"
     private static let logger = Logger(subsystem: "com.myleafy.leafy", category: "SchoolCredentials")
 
-    static func load(identity: CampusIdentity?, portal: SchoolPortal) -> [String: String] {
-        guard let account = account(identity: identity, portal: portal) else { return [:] }
+    static func load(identity: CampusIdentity?, portal: SchoolPortal,
+                     connection: SchoolConnectionMode = .campusDirect) -> [String: String] {
+        guard let account = account(identity: identity, portal: portal, connection: connection) else { return [:] }
         var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -33,11 +34,12 @@ nonisolated enum SchoolSessionCredentialStore {
     static func save(
         _ cookies: [String: String],
         identity: CampusIdentity?,
-        portal: SchoolPortal
+        portal: SchoolPortal,
+        connection: SchoolConnectionMode = .campusDirect
     ) -> Bool {
-        guard let account = account(identity: identity, portal: portal) else { return false }
+        guard let account = account(identity: identity, portal: portal, connection: connection) else { return false }
         if cookies.isEmpty {
-            return delete(identity: identity, portal: portal)
+            return delete(identity: identity, portal: portal, connection: connection)
         }
 
         do {
@@ -67,8 +69,9 @@ nonisolated enum SchoolSessionCredentialStore {
     }
 
     @discardableResult
-    static func delete(identity: CampusIdentity?, portal: SchoolPortal) -> Bool {
-        guard let account = account(identity: identity, portal: portal) else { return true }
+    static func delete(identity: CampusIdentity?, portal: SchoolPortal,
+                       connection: SchoolConnectionMode = .campusDirect) -> Bool {
+        guard let account = account(identity: identity, portal: portal, connection: connection) else { return true }
         let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             logger.error("School cookie delete failed status=\(status, privacy: .public)")
@@ -77,9 +80,25 @@ nonisolated enum SchoolSessionCredentialStore {
         return true
     }
 
-    private static func account(identity: CampusIdentity?, portal: SchoolPortal) -> String? {
+    private static func account(identity: CampusIdentity?, portal: SchoolPortal,
+                                connection: SchoolConnectionMode) -> String? {
         guard let identity else { return nil }
-        return "\(identity.scopeKey):\(portal.rawValue)"
+        let original = "\(identity.scopeKey):\(portal.rawValue)"
+        return connection == .campusDirect ? original : original + ":server-vpn"
+    }
+
+    static func deleteAll() throws {
+        let status = SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service
+        ] as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw NSError(
+                domain: "leafy.school-session",
+                code: Int(status),
+                userInfo: [NSLocalizedDescriptionKey: "无法移除教务登录态，请重试。"]
+            )
+        }
     }
 
     private static func baseQuery(account: String) -> [String: Any] {

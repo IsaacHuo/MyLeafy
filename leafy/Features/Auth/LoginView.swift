@@ -9,7 +9,14 @@ struct LoginView: View {
     @Environment(\.leafyFontScale) private var leafyFontScale
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var schoolNetworkManager = ActiveCampusContext.networkManager
+    @ObservedObject private var localIdentity = ActiveCampusContext.networkManager
+    @ObservedObject private var vpnSettings = SchoolVPNSettingsStore.shared
+    @State private var showingConnectionSettings = false
+    @State private var loginConnectionMode: SchoolConnectionMode?
+    private var schoolNetworkManager: SchoolNetworkManager {
+        if selectedCampusID != .bjfu { return ActiveCampusContext.networkManager }
+        return SchoolTimetableConnection.shared.manager(mode: loginConnectionMode, portal: selectedPortal)
+    }
     @StateObject private var networkPathObserver = LoginNetworkPathObserver()
     private let fieldHeight: CGFloat = 54
     private let buttonHeight: CGFloat = 56
@@ -105,6 +112,15 @@ struct LoginView: View {
                         }
 
                         if !isGuestCampusSelected {
+                            if !isCustomCampusSelected, selectedPortal == .undergraduate {
+                                Button(vpnSettings
+                                    .isEnabled(for: ActiveCampusContext.identity) ? "教务连接：北林 VPN" : "非校园网登录？配置北林 VPN") {
+                                        cancelAuthenticationTasks()
+                                        SchoolTimetableConnection.shared.cancel()
+                                        showingConnectionSettings = true
+                                    }
+                                    .frame(maxWidth: 360)
+                            }
                             loginForm
                                 .frame(maxWidth: 360)
 
@@ -123,6 +139,11 @@ struct LoginView: View {
                                 .foregroundStyle(AppTheme.secondaryText)
                                 .multilineTextAlignment(.center)
                                 .frame(maxWidth: 360)
+                            if schoolNetworkManager.connectionMode == .serverVPN {
+                                Button("本次校园网直连") { useCampusDirectForLogin() }
+                                Text("直连前请手动连接校园网。")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
                         }
                     }
                     .padding(.horizontal, AppSpacing.page)
@@ -132,6 +153,17 @@ struct LoginView: View {
                 }
             }
             .background(LeafyPageBackground())
+            .sheet(
+                isPresented: $showingConnectionSettings,
+                onDismiss: { loginConnectionMode = nil; startCaptchaLoad() }
+            ) {
+                NavigationStack {
+                    SchoolAcademicConnectionSettingsView(identity: ActiveCampusContext.identity)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("取消") { showingConnectionSettings = false } } }
+                }
+            }
             .leafyLoginNavigationChrome()
             .task {
                 if !isCustomCampusSelected, !isGuestCampusSelected {
@@ -150,6 +182,7 @@ struct LoginView: View {
             .onChange(of: selectedPortal) { _, newValue in
                 guard !isCustomCampusSelected, !isGuestCampusSelected else { return }
                 cancelAuthenticationTasks()
+                SchoolTimetableConnection.shared.cancel()
                 schoolNetworkManager.currentPortal = newValue
                 restoreSchoolCredential(for: newValue)
                 startCaptchaLoad()
@@ -166,10 +199,17 @@ struct LoginView: View {
             }
             .onDisappear {
                 cancelAuthenticationTasks()
+                if !showingConnectionSettings { SchoolTimetableConnection.shared.cancel() }
                 customSignUpCodeCooldownTask?.cancel()
                 customSignUpCodeCooldownTask = nil
             }
             .alert(L10n.text("提示", language: leafyLanguage), isPresented: $showAlert) {
+                if schoolNetworkManager.connectionMode == .serverVPN {
+                    Button("本次校园网直连") {
+                        useCampusDirectForLogin()
+                    }
+                    Button("修改 VPN 配置") { showingConnectionSettings = true }
+                }
                 Button(L10n.text("确定", language: leafyLanguage)) {
                     if !isCustomCampusSelected, !isGuestCampusSelected {
                         startCaptchaLoad()
@@ -310,10 +350,14 @@ struct LoginView: View {
             }
             .pickerStyle(.segmented)
 
-            Text(L10n.text(selectedPortal.loginHint, language: leafyLanguage))
-                .microCaption()
-                .foregroundStyle(AppTheme.secondaryText)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(L10n.text(
+                schoolNetworkManager.connectionMode == .serverVPN ? "通过北林 VPN 连接教务，无需另开 VPN App。" : selectedPortal
+                    .loginHint,
+                language: leafyLanguage
+            ))
+            .microCaption()
+            .foregroundStyle(AppTheme.secondaryText)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(L10n.text("当前支持本科生和研究生账号登录，老师账号暂不支持。", language: leafyLanguage))
                 .microCaption()
@@ -641,6 +685,8 @@ struct LoginView: View {
     @MainActor
     private func handleSelectedCampusChange() {
         cancelAuthenticationTasks()
+        SchoolTimetableConnection.shared.cancel()
+        loginConnectionMode = nil
         authenticationRequestID = UUID()
         captchaRequestID = UUID()
         schoolNetworkManager.cancelInFlightRequests()
@@ -734,6 +780,7 @@ struct LoginView: View {
 
     @MainActor
     private func fetchCaptcha(automatic: Bool) async {
+        if automatic, vpnSettings.isEnabled(for: ActiveCampusContext.identity) { return }
         guard !isLoggingIn, !isCaptchaLoading else { return }
         if automatic, !shouldAutomaticallyRefreshCaptcha {
             return
@@ -772,7 +819,9 @@ struct LoginView: View {
                 return
             }
 
-            if case SchoolNetworkError.loginUnavailable(let message) = error {
+            if let failure = error as? AcademicConnectorFailure {
+                captchaLoadMessage = schoolNetworkManager.connectionFailureDescription(failure)
+            } else if case SchoolNetworkError.loginUnavailable(let message) = error {
                 captchaLoadMessage = L10n.text(message, language: leafyLanguage)
             } else {
                 captchaLoadMessage = portal == .graduate
@@ -959,8 +1008,8 @@ struct LoginView: View {
     }
 
     private func loginErrorMessage(for error: Error) -> String {
-        if error is SchoolNetworkError || error is CustomCampusAuthError {
-            return L10n.text(error.localizedDescription, language: leafyLanguage)
+        if error is SchoolNetworkError || error is CustomCampusAuthError || error is AcademicConnectorFailure {
+            return L10n.text(schoolNetworkManager.connectionFailureDescription(error), language: leafyLanguage)
         }
 
         let nsError = error as NSError
@@ -968,6 +1017,13 @@ struct LoginView: View {
             return L10n.text("网络连接失败，请检查网络后重试。", language: leafyLanguage)
         }
         return L10n.text("登录失败，请稍后重试。", language: leafyLanguage)
+    }
+
+    private func useCampusDirectForLogin() {
+        cancelAuthenticationTasks()
+        SchoolTimetableConnection.shared.cancel()
+        loginConnectionMode = .campusDirect
+        startCaptchaLoad()
     }
 
     @MainActor

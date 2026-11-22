@@ -14,6 +14,6 @@ struct LiveSchoolTimetableRepository: SchoolTimetableRepository {
 
     @MainActor
     static func activeManagerForRefresh() -> SchoolNetworkManager {
-        ActiveCampusContext.networkManager
+        SchoolTimetableConnection.shared.manager(portal: ActiveCampusContext.networkManager.currentPortal)
     }
 }

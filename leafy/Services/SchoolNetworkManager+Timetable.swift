@@ -339,11 +339,22 @@ extension SchoolNetworkManager {
     }
 
     func fetchTimetable() async throws -> FetchedTimetableDocument {
+        if let timetableFetchTask { return try await timetableFetchTask.value }
+        let task = Task {
+            try await withAcademicConnection(kind: .timetable) { try await fetchTimetableInCurrentConnection() }
+        }
+        timetableFetchTask = task
+        defer { timetableFetchTask = nil }
+        return try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+    }
+
+    private func fetchTimetableInCurrentConnection() async throws -> FetchedTimetableDocument {
         let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled { throw SchoolNetworkError.featureUnavailable("演示模式使用本地课表样例，不连接学校教务系统。") }
         if currentPortal == .graduate { return try await fetchGraduateTimetable() }
         let initial = try await fetchDefaultTimetable()
         try scope.check()
+        if connectionMode == .serverVPN { isLoggedIn = true; return initial }
         let options = try timetableTermOptions(in: initial.html, selector: "select[name=xnxq01id] option")
         for term in options {
             let document: FetchedTimetableDocument
@@ -380,7 +391,7 @@ extension SchoolNetworkManager {
             return try await fetchGraduateTimetable()
         }
 
-        guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
+        guard isLoggedIn || connectionMode == .serverVPN else { throw URLError(.userAuthenticationRequired) }
         guard let rootURL = URL(string: baseURL),
               let timetableURL = URL(string: "\(baseURL)/jsxsd/xskb/xskb_list.do"),
               let mainURL = URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp"),
@@ -428,6 +439,7 @@ extension SchoolNetworkManager {
             persistLandingURL(candidateResponse.url)
 
             if isLoginPage(candidateHTML) {
+                if connectionMode == .serverVPN { isLoggedIn = false; throw SchoolNetworkError.sessionExpired }
                 continue
             }
 
@@ -491,7 +503,7 @@ extension SchoolNetworkManager {
             }
         }
 
-        if isStudentCenterPage(lastHTML) {
+        if isStudentCenterPage(lastHTML), connectionMode == .campusDirect {
             let renderedBootstrap: RenderedTimetableBootstrap?
             do {
                 let bootstrapper = await MainActor.run { TimetableWebViewBootstrapper(manager: self) }

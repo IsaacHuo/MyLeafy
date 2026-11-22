@@ -24,7 +24,8 @@ extension SchoolNetworkManager {
     }
 
     func isSchoolURL(_ url: URL) -> Bool {
-        [baseURL, graduateBaseURL].contains { base in
+        if connectionMode == .serverVPN, AcademicSchoolURL.original(url) != nil { return true }
+        return [baseURL, graduateBaseURL].contains { base in
             guard let expected = URL(string: base) else { return false }
             return url.scheme?.lowercased() == expected.scheme?.lowercased()
                 && url.host?.lowercased() == expected.host?.lowercased()
@@ -94,7 +95,8 @@ extension SchoolNetworkManager {
     }
 
     func makeRequest(url: URL, method: String = "GET") -> URLRequest {
-        var request = URLRequest(url: url)
+        let original = connectionMode == .serverVPN ? AcademicSchoolURL.original(url) ?? url : url
+        var request = URLRequest(url: original)
         request.httpMethod = method
         request.httpShouldHandleCookies = true
         request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -206,12 +208,19 @@ extension SchoolNetworkManager {
         }
     }
 
+    func replaceTransportCookies(_ cookies: [String: String]) {
+        session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
+        persistedCookieValues = cookies
+        if let url = URL(string: baseURL) { syncPersistedCookiesToStorage(for: url) }
+    }
+
     func persistAuthenticatedIdentity(eduID: String, displayName: String? = nil) {
         let trimmedEduID = eduID.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDisplayName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let sessionCookies = persistedCookieValues
         let landingURLString = lastLandingURLString
         let portal = currentPortal
+        let previousScopeKey = ActiveCampusContext.identity?.scopeKey
 
         if !trimmedEduID.isEmpty {
             let identity = CampusIdentity(
@@ -220,11 +229,22 @@ extension SchoolNetworkManager {
                 displayName: (trimmedDisplayName?.isEmpty == false) ? trimmedDisplayName : trimmedEduID,
                 portal: currentPortal
             )
+            if let academicConnection { academicConnection.activateVerifiedIdentity(identity) }
+            else if currentPortal == .undergraduate, !ReviewDemoMode.isEnabled {
+                // A first-login direct fallback still binds the explicitly configured VPN to its verified owner.
+                do { try SchoolVPNSettingsStore.shared.bindPendingLogin(to: identity) }
+                catch {
+                    SchoolVPNSettingsStore.shared.storageWarning = "教务登录成功，但 VPN 凭据未能保存，请在教务连接中重新填写。"
+                    SchoolVPNSettingsStore.shared.finishUse(for: nil)
+                }
+            }
             if ActiveCampusContext.identity?.scopeKey != identity.scopeKey {
-                cancelInFlightRequests()
+                cancelInFlightRequests(preservingAcademicConnection: true)
+                if connectionMode == .serverVPN { Self.shared.cancelInFlightRequests() }
                 SchoolDataPrefetchCoordinator.shared.cancel()
             }
             CampusIdentityStore.activate(identity)
+            cookiePersistenceAllowed = true
 
             if !sessionCookies.isEmpty {
                 persistedCookieValues = sessionCookies
@@ -237,6 +257,22 @@ extension SchoolNetworkManager {
 
         authenticatedEduID = trimmedEduID.isEmpty ? nil : trimmedEduID
         authenticatedDisplayName = (trimmedDisplayName?.isEmpty == false) ? trimmedDisplayName : trimmedEduID
+        if connectionMode == .serverVPN {
+            // Publish the verified local identity without copying this transport's school session into direct access.
+            Self.shared.currentPortal = currentPortal
+            if previousScopeKey != ActiveCampusContext.identity?.scopeKey {
+                Self.shared.session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
+                Self.shared.persistedCookieValues = SchoolSessionCredentialStore.load(
+                    identity: ActiveCampusContext.identity,
+                    portal: currentPortal
+                )
+                Self.shared.isLoggedIn = UserDefaults.standard.bool(forKey: CampusScopedDefaults.key("isLoggedIn"))
+                Self.shared.lastLandingURLString = UserDefaults.standard
+                    .string(forKey: CampusScopedDefaults.key("lastLandingURL"))
+            }
+            Self.shared.authenticatedEduID = authenticatedEduID
+            Self.shared.authenticatedDisplayName = authenticatedDisplayName
+        }
     }
 
     @MainActor
@@ -269,6 +305,7 @@ extension SchoolNetworkManager {
     }
 
     func clearSession() {
+        SchoolTimetableConnection.shared.clearSession()
         cancelInFlightRequests()
         SchoolDataPrefetchCoordinator.shared.cancel()
         clearPersistedCookies()
@@ -282,11 +319,13 @@ extension SchoolNetworkManager {
         clearDebugSnapshots()
     }
 
-    func cancelInFlightRequests() {
+    func cancelInFlightRequests(preservingAcademicConnection: Bool = false) {
+        if !preservingAcademicConnection { timetableFetchTask?.cancel() }
         authenticationOperationID = nil
         sessionGeneration &+= 1
         session.invalidateAndCancel()
         session = Self.makeSession()
+        if !preservingAcademicConnection { academicConnection?.cancel() }
     }
 
     func cookieDebugSummary(for url: URL?) -> String {
@@ -321,7 +360,7 @@ extension SchoolNetworkManager {
 
     @discardableResult
     func persistDebugHTML(_ html: String, filename: String) -> URL? {
-        guard allowsDebugSnapshots else { return nil }
+        guard connectionMode == .campusDirect, allowsDebugSnapshots else { return nil }
         guard let directory = debugDirectory() else { return nil }
         let url = directory.appendingPathComponent(filename)
         do {
@@ -366,6 +405,9 @@ extension SchoolNetworkManager {
     }
 
     func pageDebugSummary(html: String, responseURL: URL?, snapshotName: String) -> String {
+        if connectionMode == .serverVPN {
+            return "学校响应未通过页面校验（\(html.utf8.count) 字节）。"
+        }
         let title: String = {
             guard let document = try? SwiftSoup.parse(html) else { return L10n.text("无标题") }
             return ((try? document.title())?.trimmingCharacters(in: .whitespacesAndNewlines))

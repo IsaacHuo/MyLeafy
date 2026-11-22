@@ -54,7 +54,14 @@ struct TimetableView: View {
     @Query private var occurrenceNotes: [CourseOccurrenceNote]
     @Query private var courseReminderSettings: [CourseReminderSetting]
 
-    @ObservedObject private var networkManager = ActiveCampusContext.networkManager
+    @ObservedObject private var localIdentity = ActiveCampusContext.networkManager
+    @ObservedObject private var vpnSettings = SchoolVPNSettingsStore.shared
+    @State private var refreshConnectionMode: SchoolConnectionMode?
+    @State private var showingConnectionSettings = false
+    @State private var offersConnectionRecovery = false
+    private var networkManager: SchoolNetworkManager {
+        SchoolTimetableConnection.shared.manager(mode: refreshConnectionMode, portal: localIdentity.currentPortal)
+    }
     @State private var isFetching = false
     @State private var progressController = AcademicOperationProgressController()
     @State private var alertMessage = ""
@@ -543,6 +550,13 @@ struct TimetableView: View {
     private var rootAlerts: some View {
         rootSheets
             .alert("提示", isPresented: $showAlert) {
+                if offersConnectionRecovery {
+                    Button("重试同步") { Task { await fetchAndParseTimetable(userInitiated: true) } }
+                    Button("本次校园网直连") {
+                        Task { await fetchAndParseTimetable(userInitiated: true, connectionMode: .campusDirect) }
+                    }
+                    Button("教务连接设置") { showingConnectionSettings = true }
+                }
                 if requiresPeriodConfiguration {
                     Button("补全课表作息") {
                         appNavigation.openProfileRoute(.timetableSettings); requiresPeriodConfiguration = false }
@@ -573,15 +587,24 @@ struct TimetableView: View {
                 networkManager: networkManager,
                 operationKind: .timetable,
                 progressController: progressController
-            ) { _ in
+            ) { completion in
                 Task {
                     await fetchAndParseTimetable(
                         userInitiated: true,
-                        allowsAutomaticRecovery: false
+                        allowsAutomaticRecovery: false,
+                        connectionMode: completion.connectionMode
                     )
                 }
             }
             .academicOperationProgress(progressController)
+            .sheet(isPresented: $showingConnectionSettings) {
+                NavigationStack {
+                    SchoolAcademicConnectionSettingsView(identity: ActiveCampusContext.identity)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("关闭") { showingConnectionSettings = false } } }
+                }
+            }
     }
 
     private var onboardingAlertBinding: Binding<Bool> {
@@ -2225,10 +2248,14 @@ struct TimetableView: View {
     @MainActor
     private func fetchAndParseTimetable(
         userInitiated: Bool,
-        allowsAutomaticRecovery: Bool = true
+        allowsAutomaticRecovery: Bool = true,
+        connectionMode: SchoolConnectionMode? = nil
     ) async {
         let scope = CampusOperationScope()
         guard !isFetching, !Task.isCancelled else { return }
+        if !userInitiated, vpnSettings.isEnabled(for: ActiveCampusContext.identity) { return }
+        refreshConnectionMode = connectionMode
+        offersConnectionRecovery = false
         if isCustomCampus {
             await MainActor.run {
                 if userInitiated {
@@ -2284,7 +2311,7 @@ struct TimetableView: View {
             return
         }
 
-        guard networkManager.isLoggedIn else {
+        guard networkManager.isLoggedIn || networkManager.connectionMode == .serverVPN else {
             if userInitiated, networkManager.hasCachedIdentity {
                 reauthenticationRequest = SchoolReauthenticationRequest(
                     context: .timetable(portal: networkManager.currentPortal),
@@ -2308,7 +2335,9 @@ struct TimetableView: View {
             applySemesterRuntimeConfig(semesterConfig)
             let refreshUseCase = TimetableRefreshUseCase(repository: dependencies.schoolTimetableRepository)
             progressReporter?(.begin(.fetchingTimetable))
-            let document = try await refreshUseCase.fetchDocument()
+            let document = try await SchoolConnectionRoute.$modeOverride.withValue(refreshConnectionMode) {
+                try await refreshUseCase.fetchDocument()
+            }
             try scope.check()
             let parsedCourseRecords: [ParsedCourseRecord]
 
@@ -2350,7 +2379,8 @@ struct TimetableView: View {
                 timetableGridSnapshotCache.invalidate()
                 timetableGridSnapshot = nil
                 TimetableCacheMetadata.lastSyncAt = Date()
-                TimetableCacheMetadata.lastFailureMessage = reminderWarning
+                let connectionWarning = networkManager.academicConnection?.cleanupWarning
+                TimetableCacheMetadata.lastFailureMessage = reminderWarning ?? connectionWarning
                 TimetableCacheMetadata.lastSyncedSemesterID = document.sourceSemesterID
                 AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: Date())
                 SchoolDataRefreshNotifier.post(.timetable)
@@ -2359,14 +2389,14 @@ struct TimetableView: View {
                     await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(courses: sharedCourses)
                 }
                 lastSyncAt = TimetableCacheMetadata.lastSyncAt
-                lastFailureMessage = reminderWarning
+                lastFailureMessage = reminderWarning ?? connectionWarning
                 isFetching = false
                 progressController.completeCurrentStep()
                 progressController.clear()
                 syncReturnButtonVisibility()
                 publishWidgetSnapshot()
                 if userInitiated && !Task.isCancelled {
-                    alertMessage = reminderWarning ?? timetableRefreshMessage(for: refreshSummary)
+                    alertMessage = reminderWarning ?? connectionWarning ?? timetableRefreshMessage(for: refreshSummary)
                     showAlert = true
                 }
             }
@@ -2379,8 +2409,9 @@ struct TimetableView: View {
                 isFetching = false
                 requiresPeriodConfiguration = error is TimetableConfigurationRequired
                 emptyResultIdentity = error is TimetableEmptyResult ? ActiveCampusContext.identity : nil
-                TimetableCacheMetadata.lastFailureMessage = error.localizedDescription
-                lastFailureMessage = error.localizedDescription
+                let failureMessage = networkManager.connectionFailureDescription(error)
+                TimetableCacheMetadata.lastFailureMessage = failureMessage
+                lastFailureMessage = failureMessage
                 publishWidgetSnapshot()
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
                     reauthenticationRequest = SchoolReauthenticationRequest(
@@ -2389,9 +2420,10 @@ struct TimetableView: View {
                     )
                 } else {
                     progressController.clear()
+                    offersConnectionRecovery = networkManager.connectionMode == .serverVPN
                     alertMessage = courses.isEmpty
-                        ? L10n.text("获取课表失败：%@", language: leafyLanguage, error.localizedDescription)
-                        : L10n.text("获取课表失败，已继续显示本地缓存：%@", language: leafyLanguage, error.localizedDescription)
+                        ? L10n.text("获取课表失败：%@", language: leafyLanguage, failureMessage)
+                        : L10n.text("获取课表失败，已继续显示本地缓存：%@", language: leafyLanguage, failureMessage)
                     showAlert = true
                 }
             }

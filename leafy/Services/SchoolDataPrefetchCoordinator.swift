@@ -14,6 +14,7 @@ enum SchoolDataPrefetchSkipReason: Equatable {
     case customCampus
     case missingIdentity
     case notLoggedIn
+    case vpnRequiresManualAction
     case successCooldown
     case failureCooldown
 }
@@ -60,6 +61,9 @@ final class SchoolDataPrefetchCoordinator {
         guard activeTask == nil else {
             return .skipped(.alreadyRunning)
         }
+        if SchoolVPNSettingsStore.shared.isEnabled(for: ActiveCampusContext.identity) {
+            return .skipped(.vpnRequiresManualAction)
+        }
 
         if ActiveCampusContext.identity?.isCustom == true {
             return .skipped(.customCampus)
@@ -97,7 +101,9 @@ final class SchoolDataPrefetchCoordinator {
                 }
             }
             logger.info("Academic prefetch started trigger=\(String(describing: trigger), privacy: .public)")
-            let outcome = await syncOperation(modelContext, language)
+            let outcome = await SchoolConnectionRoute.$modeOverride.withValue(.campusDirect) {
+                await syncOperation(modelContext, language)
+            }
             guard !Task.isCancelled, scope.isCurrent, activeRunID == runID else { return }
 
             switch outcome {

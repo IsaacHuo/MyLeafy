@@ -14,6 +14,8 @@ myleafy_root="/opt/myleafy/${myleafy_environment}"
 myleafy_release="${myleafy_root}/releases/${myleafy_commit}"
 myleafy_port=3101; myleafy_host=api-staging.myleafy.space
 if [[ "$myleafy_environment" == production ]]; then myleafy_port=3100; myleafy_host=api.myleafy.space; fi
+myleafy_academic_port=3131
+if [[ "$myleafy_environment" == production ]]; then myleafy_academic_port=3130; fi
 if [[ -e "$myleafy_release" ]]; then
   [[ "$(readlink "${myleafy_root}/current")" == "$myleafy_release" ]]
   /usr/local/bin/node "$myleafy_release/backend/scripts/ecs/verify-release.mjs" "$myleafy_release" "$myleafy_commit"
@@ -21,10 +23,13 @@ if [[ -e "$myleafy_release" ]]; then
   # must match the already accepted manifest. Never overwrite a partial install.
   tar -xOf "$myleafy_archive" ./release-manifest.json | cmp - "$myleafy_release/release-manifest.json"
   curl -fsS -H "Host: $myleafy_host" "http://127.0.0.1:${myleafy_port}/health" >"${myleafy_root}/retry-health.json"
+  curl -fsS "http://127.0.0.1:${myleafy_academic_port}/health" >"${myleafy_root}/academic-health.json"
   /usr/local/bin/node --input-type=module - "$myleafy_root" "$myleafy_environment" "$myleafy_commit" <<'JS'
 import {readFileSync} from 'node:fs';
 const [root,environment,commit]=process.argv.slice(2),report=JSON.parse(readFileSync(root+'/deployment.json','utf8')),health=JSON.parse(readFileSync(root+'/retry-health.json','utf8'));
 if(!report.success||report.commit!==commit||report.environment!==environment||health.status!=='ok'||health.commit!==commit||health.environment!==environment)throw new Error('Existing release has no matching successful deployment evidence');
+const academic=JSON.parse(readFileSync(root+'/academic-health.json','utf8'));
+if(academic.status!=='ok'||academic.commit!==commit)throw new Error('Academic connector release identity failed');
 console.log(JSON.stringify({environment,commit,verified:true,idempotent:true}));
 JS
   exit 0
@@ -65,11 +70,16 @@ s=p.read_text().splitlines();s=[v for v in s if not v.startswith('DEPLOY_COMMIT=
 Path('..','site','dist','release.json').write_text(json.dumps({'environment':sys.argv[1],'commit':sys.argv[2]})+'\n')
 PY
 myleafy_previous=$(readlink "${myleafy_root}/current" || true)
+if systemctl is-active --quiet "myleafy-academic@${myleafy_environment}"; then
+  systemctl stop "myleafy-academic@${myleafy_environment}"
+fi
 ln -s "$myleafy_release" "${myleafy_root}/current.new"
 mv -Tf "${myleafy_root}/current.new" "${myleafy_root}/current"
-install -m 644 deploy/myleafy@.service deploy/myleafy-backup@.service deploy/myleafy-backup@.timer /etc/systemd/system/
+install -m 644 deploy/myleafy@.service deploy/myleafy-academic@.service deploy/myleafy-backup@.service deploy/myleafy-backup@.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl start "myleafy@${myleafy_environment}"
+systemctl enable "myleafy-academic@${myleafy_environment}"
+systemctl start "myleafy-academic@${myleafy_environment}"
 if [[ -f "/etc/myleafy/${myleafy_environment}.monitor.env" ]]; then
   install -m 644 deploy/myleafy-monitor@.service deploy/myleafy-monitor-report@.service deploy/myleafy-monitor-report@.timer /etc/systemd/system/
   systemctl daemon-reload
@@ -82,11 +92,17 @@ for myleafy_attempt in {1..20}; do
   if curl -fsS -H "Host: $myleafy_host" "http://127.0.0.1:${myleafy_port}/health" >"${myleafy_root}/health.json"; then break; fi
   sleep 1
 done
+for myleafy_attempt in {1..20}; do
+  if curl -fsS "http://127.0.0.1:${myleafy_academic_port}/health" >"${myleafy_root}/academic-health.json"; then break; fi
+  sleep 1
+done
 /usr/local/bin/node --input-type=module - "$myleafy_root" "$myleafy_environment" "$myleafy_commit" "$myleafy_previous" <<'JS'
 import {readFileSync,writeFileSync} from 'node:fs';
 const [root,environment,commit,previous]=process.argv.slice(2),health=JSON.parse(readFileSync(root+'/health.json','utf8'));
 if(health.status!=='ok'||health.environment!==environment||health.commit!==commit)throw new Error('Release health identity failed; database is not automatically rolled back');
-writeFileSync(root+'/deployment.json',JSON.stringify({environment,commit,previous,success:true,checkedAt:new Date().toISOString(),checks:['artifact-sha256','release-files','database-migrations','health-commit']},null,2),{mode:0o600});
+const academic=JSON.parse(readFileSync(root+'/academic-health.json','utf8'));
+if(academic.status!=='ok'||academic.commit!==commit)throw new Error('Academic connector release identity failed');
+writeFileSync(root+'/deployment.json',JSON.stringify({environment,commit,previous,success:true,checkedAt:new Date().toISOString(),checks:['artifact-sha256','release-files','database-migrations','health-commit','academic-health-commit']},null,2),{mode:0o600});
 JS
 if [[ -f "/etc/myleafy/${myleafy_environment}.monitor.env" ]]; then
   /usr/local/bin/node deploy/monitor-maintenance.mjs "$myleafy_environment" end

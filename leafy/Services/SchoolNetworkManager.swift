@@ -67,10 +67,12 @@ final class SchoolNetworkManager: ObservableObject {
 
     var persistedCookieValues: [String: String] {
         didSet {
+            guard connectionMode != .serverVPN || cookiePersistenceAllowed else { return }
             _ = SchoolSessionCredentialStore.save(
                 persistedCookieValues,
                 identity: CampusIdentityStore.currentIdentity(),
-                portal: currentPortal
+                portal: currentPortal,
+                connection: connectionMode
             )
         }
     }
@@ -122,10 +124,15 @@ final class SchoolNetworkManager: ObservableObject {
     var sessionGeneration: UInt64 = 0
     var session: URLSession = makeSession()
     var authenticationOperationID: UUID?
+    var cookiePersistenceAllowed = true
+    var timetableFetchTask: Task<FetchedTimetableDocument, Error>?
     private let requestLoader: (@MainActor (URLRequest) async throws -> (Data, URLResponse))?
     let credentialSaver: @MainActor (String, String, CampusID, SchoolPortal) -> Bool
+    let connectionMode: SchoolConnectionMode
+    let academicConnection: SchoolAcademicConnection?
 
     func loadSchoolRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        if let academicConnection { return try await academicConnection.load(request) }
         if let requestLoader { return try await requestLoader(request) }
         guard !AppRuntimeEnvironment.isRunningUnitTests else { throw URLError(.unsupportedURL) }
         return try await session.data(for: request)
@@ -149,17 +156,32 @@ final class SchoolNetworkManager: ObservableObject {
     init(
         requestLoader: (@MainActor (URLRequest) async throws -> (Data, URLResponse))? = nil,
         credentialSaver: @escaping @MainActor (String, String, CampusID, SchoolPortal)
-            -> Bool = SchoolLoginCredentialStore.save
+            -> Bool = SchoolLoginCredentialStore.save,
+        connectionMode: SchoolConnectionMode = .campusDirect,
+        academicConnection: SchoolAcademicConnection? = nil
     ) {
         self.requestLoader = requestLoader
         self.credentialSaver = credentialSaver
+        self.connectionMode = connectionMode
+        self.academicConnection = academicConnection
         let currentIdentity = CampusIdentityStore.currentIdentity()
-        let portal = SchoolPortal(rawValue: UserDefaults.standard
-            .string(forKey: CampusScopedDefaults.key("schoolPortal")) ?? "") ?? .undergraduate
-        self.isLoggedIn = UserDefaults.standard.bool(forKey: CampusScopedDefaults.key("isLoggedIn"))
-        self.persistedCookieValues = SchoolSessionCredentialStore.load(identity: currentIdentity, portal: portal)
+        let portal = connectionMode == .serverVPN ? SchoolPortal
+            .undergraduate : SchoolPortal(rawValue: UserDefaults.standard
+                .string(forKey: CampusScopedDefaults.key("schoolPortal")) ?? "") ?? .undergraduate
+        let stateKey: (String) -> String = { key in
+            CampusScopedDefaults.key(connectionMode == .serverVPN ? "serverVPN.\(key)" : key)
+        }
+        self.isLoggedIn = (UserDefaults.standard.object(forKey: stateKey("isLoggedIn")) as? Bool)
+            ?? UserDefaults.standard.bool(forKey: CampusScopedDefaults.key("isLoggedIn"))
+        let storedCookies = SchoolSessionCredentialStore.load(
+            identity: currentIdentity,
+            portal: portal,
+            connection: connectionMode
+        )
+        self.persistedCookieValues = storedCookies.isEmpty && connectionMode == .serverVPN
+            ? SchoolSessionCredentialStore.load(identity: currentIdentity, portal: portal) : storedCookies
         self.currentPortal = portal
-        self.lastLandingURLString = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("lastLandingURL"))
+        self.lastLandingURLString = UserDefaults.standard.string(forKey: stateKey("lastLandingURL"))
         self.authenticatedEduID = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("authenticatedEduID"))
         self.authenticatedDisplayName = UserDefaults.standard
             .string(forKey: CampusScopedDefaults.key("authenticatedDisplayName"))
@@ -171,7 +193,27 @@ final class SchoolNetworkManager: ObservableObject {
     }
 
     private func storageKey(_ key: String) -> String {
-        CampusScopedDefaults.key(key)
+        let separated = connectionMode == .serverVPN && ["isLoggedIn", "lastLandingURL"].contains(key)
+        return CampusScopedDefaults.key(separated ? "serverVPN.\(key)" : key)
+    }
+
+    func withAcademicConnection<T>(
+        kind: AcademicOperationKind?,
+        retainingForLogin: Bool = false,
+        operation: @MainActor () async throws -> T
+    ) async throws -> T {
+        guard let academicConnection else { return try await operation() }
+        return try await academicConnection.perform(
+            kind: kind,
+            retainingForLogin: retainingForLogin,
+            operation: operation
+        )
+    }
+
+    func connectionFailureDescription(_ error: Error) -> String {
+        let message = error.localizedDescription
+        guard let warning = academicConnection?.cleanupWarning, !message.contains(warning) else { return message }
+        return message + "\n" + warning
     }
 }
 

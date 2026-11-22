@@ -35,6 +35,8 @@ nonisolated enum SchoolReauthentication {
         context: SchoolReauthenticationContext,
         allowsAutomaticAttempt: Bool = true
     ) -> SchoolReauthenticationRequest? {
+        // The VPN outlet validates its own candidate session in the user action before asking for a password.
+        if networkManager.connectionMode == .serverVPN { return nil }
         guard SchoolSessionRecoveryPolicy.shouldBeginRecovery(
             hasCachedIdentity: networkManager.hasCachedIdentity,
             isLoggedIn: networkManager.isLoggedIn
@@ -122,6 +124,7 @@ struct SchoolReauthenticationContext: Equatable {
 
 struct SchoolReauthenticationRequest: Identifiable {
     let id = UUID()
+    let identityScopeKey = ActiveCampusContext.identity?.scopeKey
     let context: SchoolReauthenticationContext
     let allowsAutomaticAttempt: Bool
 
@@ -142,6 +145,7 @@ enum SchoolReauthenticationMethod: Equatable {
 struct SchoolReauthenticationCompletion {
     let context: SchoolReauthenticationContext
     let method: SchoolReauthenticationMethod
+    var connectionMode: SchoolConnectionMode? = nil
 }
 
 extension View {
@@ -166,6 +170,7 @@ extension View {
 
 private struct SchoolManualReauthenticationPresentation: Identifiable {
     let id = UUID()
+    let identityScopeKey = ActiveCampusContext.identity?.scopeKey
     let context: SchoolReauthenticationContext
     let challenge: SchoolCaptchaChallenge?
     let initialMessage: String?
@@ -197,13 +202,31 @@ private struct SchoolReauthenticationModifier: ViewModifier {
             .leafySheet(item: $manualPresentation) { presentation in
                 SchoolReauthenticationSheet(
                     networkManager: networkManager,
-                    presentation: presentation
+                    presentation: presentation,
+                    operationKind: operationKind,
+                    onUseCampusDirect: {
+                        networkManager.academicConnection?.cancel()
+                        manualPresentation = nil
+                        guard presentation.identityScopeKey == ActiveCampusContext.identity?.scopeKey
+                        else { progressController.clear(); return }
+                        onAuthenticated(SchoolReauthenticationCompletion(
+                            context: presentation.context,
+                            method: .manual,
+                            connectionMode: .campusDirect
+                        ))
+                    }
                 ) {
                     manualPresentation = nil
+                    guard presentation.identityScopeKey == ActiveCampusContext.identity?.scopeKey else {
+                        networkManager.academicConnection?.cancel()
+                        progressController.clear()
+                        return
+                    }
                     onAuthenticated(
                         SchoolReauthenticationCompletion(
                             context: presentation.context,
-                            method: .manual
+                            method: .manual,
+                            connectionMode: networkManager.connectionMode
                         )
                     )
                 }
@@ -227,20 +250,29 @@ private struct SchoolReauthenticationModifier: ViewModifier {
         progressController.begin(operationKind)
         let service = SchoolAuthenticationService(client: networkManager)
         do {
-            let result = try await service.recover(
-                portal: activeRequest.context.portal,
-                allowsAutomaticAttempt: activeRequest.allowsAutomaticAttempt,
-                progressReporter: progressController.reporter(for: operationKind)
-            )
+            try networkManager.academicConnection?.prepareRecovery(operationKind)
+            let result = try await networkManager.withAcademicConnection(kind: operationKind, retainingForLogin: true) {
+                try await service.recover(
+                    portal: activeRequest.context.portal,
+                    allowsAutomaticAttempt: activeRequest.allowsAutomaticAttempt,
+                    progressReporter: progressController.reporter(for: operationKind)
+                )
+            }
             guard !Task.isCancelled else { return }
             request = nil
 
             switch result {
             case .authenticated:
+                guard activeRequest.identityScopeKey == ActiveCampusContext.identity?.scopeKey else {
+                    networkManager.academicConnection?.cancel()
+                    progressController.clear()
+                    return
+                }
                 onAuthenticated(
                     SchoolReauthenticationCompletion(
                         context: activeRequest.context,
-                        method: .automatic
+                        method: .automatic,
+                        connectionMode: networkManager.connectionMode
                     )
                 )
             case .requiresManual(let challenge, let message):
@@ -251,10 +283,12 @@ private struct SchoolReauthenticationModifier: ViewModifier {
                     initialMessage: message
                 )
             case .networkUnavailable:
+                networkManager.academicConnection?.cancel()
                 progressController.clear()
                 networkNotice = .campusNetworkRequired
             }
         } catch is CancellationError {
+            networkManager.academicConnection?.cancel()
             return
         } catch {
             guard !Task.isCancelled else { return }
@@ -273,7 +307,7 @@ private struct SchoolReauthenticationModifier: ViewModifier {
     }
 
     private func recoveryErrorMessage(_ error: Error) -> String {
-        return error.localizedDescription
+        return networkManager.connectionFailureDescription(error)
     }
 }
 
@@ -283,8 +317,11 @@ private struct SchoolReauthenticationSheet: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
 
     @ObservedObject private var networkManager: SchoolNetworkManager
+    @ObservedObject private var vpnSettings = SchoolVPNSettingsStore.shared
 
     let presentation: SchoolManualReauthenticationPresentation
+    let operationKind: AcademicOperationKind
+    let onUseCampusDirect: () -> Void
     let onAuthenticated: () -> Void
 
     @State private var account: String
@@ -299,6 +336,7 @@ private struct SchoolReauthenticationSheet: View {
     @State private var prefilledAccount: String?
     @State private var captchaTask: Task<Void, Never>?
     @State private var loginTask: Task<Void, Never>?
+    @State private var didAuthenticate = false
 
     private var canSubmit: Bool {
         !isLoggingIn && !isCaptchaLoading &&
@@ -311,6 +349,8 @@ private struct SchoolReauthenticationSheet: View {
     init(
         networkManager: SchoolNetworkManager,
         presentation: SchoolManualReauthenticationPresentation,
+        operationKind: AcademicOperationKind,
+        onUseCampusDirect: @escaping () -> Void,
         onAuthenticated: @escaping () -> Void
     ) {
         _networkManager = ObservedObject(wrappedValue: networkManager)
@@ -331,6 +371,8 @@ private struct SchoolReauthenticationSheet: View {
         _errorMessage = State(initialValue: presentation.initialMessage)
         _prefilledAccount = State(initialValue: matchingCredential?.account)
         self.presentation = presentation
+        self.operationKind = operationKind
+        self.onUseCampusDirect = onUseCampusDirect
         self.onAuthenticated = onAuthenticated
     }
 
@@ -360,6 +402,19 @@ private struct SchoolReauthenticationSheet: View {
                     }
 
                     submitButton
+                    if networkManager.connectionMode == .serverVPN {
+                        NavigationLink("修改 VPN 配置") {
+                            SchoolAcademicConnectionSettingsView(identity: ActiveCampusContext.identity)
+                        }
+                        Button("本次校园网直连") {
+                            clearSensitiveFields()
+                            dismiss()
+                            onUseCampusDirect()
+                        }
+                        Text("直连前请手动连接校园网。下一次同步仍默认使用 VPN。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .padding(AppSpacing.page)
             }
@@ -378,10 +433,19 @@ private struct SchoolReauthenticationSheet: View {
                 captchaTask?.cancel()
                 loginTask?.cancel()
                 networkManager.cancelAuthenticationOperation()
+                if !didAuthenticate { networkManager.academicConnection?.cancel() }
                 clearSensitiveFields()
             }
             .onChange(of: account) { _, newValue in
                 handleAccountChange(newValue)
+            }
+            .onChange(of: vpnSettings.revision) { _, _ in
+                captchaTask?.cancel()
+                loginTask?.cancel()
+                networkManager.academicConnection?.cancel()
+                challenge = nil
+                captchaCode = ""
+                errorMessage = "VPN 配置已更新，请刷新验证码后继续。"
             }
         }
     }
@@ -394,9 +458,13 @@ private struct SchoolReauthenticationSheet: View {
             Text(L10n.text(presentation.context.message, language: leafyLanguage))
                 .leafyBody()
                 .foregroundStyle(AppTheme.secondaryText)
-            Text(L10n.text(presentation.context.portal.loginHint, language: leafyLanguage))
-                .microCaption()
-                .foregroundStyle(AppTheme.tertiaryText)
+            Text(L10n.text(
+                networkManager.connectionMode == .serverVPN ? "通过北林 VPN 连接教务，无需另开 VPN App。" : presentation.context
+                    .portal.loginHint,
+                language: leafyLanguage
+            ))
+            .microCaption()
+            .foregroundStyle(AppTheme.tertiaryText)
         }
     }
 
@@ -526,6 +594,7 @@ private struct SchoolReauthenticationSheet: View {
         defer { isCaptchaLoading = false }
 
         do {
+            try networkManager.academicConnection?.prepareRecovery(operationKind)
             let loaded = try await SchoolAuthenticationService(client: networkManager)
                 .fetchManualChallenge(portal: presentation.context.portal)
             try Task.checkCancellation()
@@ -543,7 +612,7 @@ private struct SchoolReauthenticationSheet: View {
                     language: leafyLanguage
                 )
             } else {
-                errorMessage = error.localizedDescription
+                errorMessage = networkManager.connectionFailureDescription(error)
             }
         }
     }
@@ -573,13 +642,14 @@ private struct SchoolReauthenticationSheet: View {
             }
 
             networkManager.isLoggedIn = true
+            didAuthenticate = true
             clearSensitiveFields()
             dismiss()
             onAuthenticated()
         } catch {
             guard !Task.isCancelled else { return }
             showsCredentialFields = true
-            errorMessage = error.localizedDescription
+            errorMessage = networkManager.connectionFailureDescription(error)
             captchaCode = ""
             isLoggingIn = false
             await fetchCaptcha(resetError: false)

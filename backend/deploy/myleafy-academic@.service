@@ -1,0 +1,33 @@
+[Unit]
+Description=MyLeafy academic connector (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=yes
+Environment=ENVIRONMENT=%i
+WorkingDirectory=/opt/myleafy/%i/current/backend
+ExecStart=/usr/local/bin/node dist/academic-connector.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=25
+UMask=0077
+LimitCORE=0
+MemoryMax=256M
+MemorySwapMax=0
+CPUQuota=100%
+TasksMax=64
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

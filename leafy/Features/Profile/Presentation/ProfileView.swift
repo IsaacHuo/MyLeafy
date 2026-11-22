@@ -1933,7 +1933,16 @@ private struct CacheAndSyncView: View {
     @State private var cacheSummary = ProfileCacheSummary.empty
     @State private var showingAcademicCacheClearConfirmation = false
     @State private var showingClearConfirmation = false
-    private let networkManager = ActiveCampusContext.networkManager
+    @ObservedObject private var vpnSettings = SchoolVPNSettingsStore.shared
+    @State private var refreshConnectionMode: SchoolConnectionMode?
+    @State private var vpnFailure: String?
+    private var usesVPN: Bool { !ReviewDemoMode.isEnabled && vpnSettings.isEnabled(for: ActiveCampusContext.identity) }
+    private var networkManager: SchoolNetworkManager {
+        SchoolTimetableConnection.shared.manager(
+            mode: refreshConnectionMode,
+            portal: ActiveCampusContext.networkManager.currentPortal
+        )
+    }
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var operationAlert: LeafyOperationAlert?
 
@@ -1943,6 +1952,20 @@ private struct CacheAndSyncView: View {
 
     var body: some View {
         List {
+            if !ReviewDemoMode.isEnabled, ActiveCampusContext.identity?.campusID == .bjfu,
+               ActiveCampusContext.identity?.portal == .undergraduate {
+                Section {
+                    NavigationLink {
+                        SchoolAcademicConnectionSettingsView(identity: ActiveCampusContext.identity)
+                    } label: {
+                        LabeledContent("教务连接", value: usesVPN ? "北林 VPN 同步" : "校园网直连")
+                    }
+                    .disabled(isSyncing || isClearing)
+                    if let warning = vpnSettings.storageWarning { Text(warning).foregroundStyle(AppTheme.danger) }
+                } footer: {
+                    Text(usesVPN ? "点击同步即可更新课表，无需另开 VPN App。其他教务数据仍使用校园网直连。" : "配置北林 VPN 后，可在非校园网环境下手动更新课表。")
+                }
+            }
             Section {
                 Button {
                     Task { await syncAll() }
@@ -2023,13 +2046,18 @@ private struct CacheAndSyncView: View {
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
             networkManager: networkManager,
-            operationKind: .allAcademicData,
+            operationKind: usesVPN ? .timetable : .allAcademicData,
             progressController: progressController
-        ) { _ in
-            Task { await syncAll(allowsAutomaticRecovery: false) }
+        ) { completion in
+            Task { await syncAll(allowsAutomaticRecovery: false, connectionMode: completion.connectionMode) }
         }
         .academicOperationProgress(progressController)
         .leafyOperationAlert($operationAlert)
+        .alert("课表同步失败", isPresented: Binding(get: { vpnFailure != nil }, set: { if !$0 { vpnFailure = nil } })) {
+            Button("重试同步") { Task { await syncAll() } }
+            Button("本次校园网直连") { Task { await syncAll(connectionMode: .campusDirect) } }
+            Button("保留当前课表", role: .cancel) { vpnFailure = nil }
+        } message: { Text(vpnFailure ?? "") }
         .onAppear(perform: refreshCacheSummary)
         .onReceive(NotificationCenter.default.publisher(for: .schoolDataDidRefresh)) { _ in
             refreshCacheSummary()
@@ -2043,7 +2071,7 @@ private struct CacheAndSyncView: View {
         if isSyncing {
             return L10n.text(isCustomCampus ? "检查中" : "同步中", language: leafyLanguage)
         }
-        return L10n.text(isCustomCampus ? "检查本地数据状态" : "重新同步教务数据", language: leafyLanguage)
+        return L10n.text(isCustomCampus ? "检查本地数据状态" : usesVPN ? "同步课表" : "重新同步教务数据", language: leafyLanguage)
     }
 
     private var cacheFooterText: String {
@@ -2101,8 +2129,13 @@ private struct CacheAndSyncView: View {
     }
 
     @MainActor
-    private func syncAll(allowsAutomaticRecovery: Bool = true) async {
+    private func syncAll(allowsAutomaticRecovery: Bool = true, connectionMode: SchoolConnectionMode? = nil) async {
         guard !isSyncing else { return }
+        refreshConnectionMode = connectionMode
+        if usesVPN {
+            await syncTimetable(allowsAutomaticRecovery: allowsAutomaticRecovery)
+            return
+        }
 
         if !isCustomCampus,
            !ReviewDemoMode.isEnabled,
@@ -2152,6 +2185,60 @@ private struct CacheAndSyncView: View {
                 context: context,
                 allowsAutomaticAttempt: allowsAutomaticRecovery
             )
+        }
+    }
+
+    @MainActor
+    private func syncTimetable(allowsAutomaticRecovery: Bool) async {
+        if let request = SchoolReauthentication.preflightRequest(
+            networkManager: networkManager,
+            context: .timetable(portal: .undergraduate),
+            allowsAutomaticAttempt: allowsAutomaticRecovery
+        ) { reauthenticationRequest = request; return }
+        isSyncing = true
+        progressController.begin(.timetable)
+        let scope = CampusOperationScope()
+        defer { isSyncing = false; refreshCacheSummary() }
+        do {
+            let useCase = TimetableRefreshUseCase()
+            progressController.reporter(for: .timetable)(.begin(.fetchingTimetable))
+            let document = try await SchoolConnectionRoute.$modeOverride.withValue(refreshConnectionMode) {
+                try await useCase.fetchDocument()
+            }
+            try scope.check()
+            progressController.reporter(for: .timetable)(.begin(.processingTimetable))
+            let records = try await TimetableRefreshUseCase.parseRecords(html: document.html)
+            try scope.check()
+            progressController.reporter(for: .timetable)(.begin(.savingTimetable))
+            let saved = try useCase.persist(
+                records: records,
+                existingCourses: courses,
+                modelContext: modelContext,
+                semesterID: document.sourceSemesterID
+            )
+            let reminderWarning = await saved.reminders.restore()
+            try scope.check()
+            let warning = reminderWarning ?? networkManager.academicConnection?.cleanupWarning
+            TimetableCacheMetadata.lastSyncAt = Date()
+            TimetableCacheMetadata.lastSyncedSemesterID = document.sourceSemesterID
+            TimetableCacheMetadata.lastFailureMessage = warning
+            LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
+            SchoolDataRefreshNotifier.post(.timetable)
+            progressController.clear()
+            operationAlert = warning.map { LeafyOperationAlert.partial($0) } ?? .success("课表同步完成。")
+        } catch {
+            guard !scope.wasCancelled(error) else { progressController.clear(); return }
+            if SchoolReauthentication.requiresReauthentication(error) {
+                reauthenticationRequest = SchoolReauthenticationRequest(
+                    context: .timetable(portal: .undergraduate),
+                    allowsAutomaticAttempt: allowsAutomaticRecovery
+                )
+            } else {
+                progressController.clear()
+                let failureMessage = networkManager.connectionFailureDescription(error)
+                TimetableCacheMetadata.lastFailureMessage = failureMessage
+                vpnFailure = "\(failureMessage)\n已保留上次成功同步的课表。直连前请手动连接校园网。"
+            }
         }
     }
 
@@ -2259,13 +2346,17 @@ private struct CampusNetworkConnectionGuideView: View {
                     .foregroundStyle(AppTheme.secondaryText)
             }
 
-            Section("在校外") {
+            Section("非校园网环境") {
                 Label("通过北林 VPN 连接", systemImage: "network.badge.shield.half.filled")
                     .leafyHeadline()
 
-                Text("先安装 EasyConnect，使用学校账号连接北林 VPN。连接成功后返回 MyLeafy，可使用需要校园网的教务功能。")
+                Text("在“缓存与同步 → 教务连接”中填写北林 VPN 账号，即可通过流量或普通 Wi-Fi 手动更新本科课表，无需另开 VPN App。其他教务功能仍需手机连接校园网或学校 VPN。")
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
+
+                NavigationLink("配置课表 VPN 同步") {
+                    SchoolAcademicConnectionSettingsView(identity: ActiveCampusContext.identity)
+                }
 
                 Button {
                     openURL(easyConnectURL)

@@ -1,5 +1,9 @@
 # 双端功能、验证与交付状态
 
+## 北林非校园网教务同步（2026-11-10，接入验证）
+
+2026-11-22 恢复实施，本轮仅 iOS 和必要后端，Android 延后。任务分支已接入本科 VPN 设置、首次登录和课表手动刷新，保留原校园网直连；独立连接器的资源限制、操作隔离和清理离线测试通过，编译和当前提交 CI 证据见 PR #84。ECS 此前通过学校官方 HTTPS 网页 VPN 完成本人强智登录及来源学期 `2026-2027-1` 的页面读取，验证码最终人工核对、退出明确成功；不等于真实 iOS 解析/保存、手机已有 Cookie 复用、多学生会话或 App 自动识别通过。研究生不在新需求范围。staging、真机、TestFlight 和正式部署仍待验收；详见 [设计与证据](../docs/design/bjfu-academic-vpn-sync.md)。
+
 ## iOS 3.2.8 图片保存与课表纠错（2026-11-22，待验收）
 
 独立分支 [#88](https://github.com/IsaacHuo/MyLeafy/issues/88) / [草稿 PR #87](https://github.com/IsaacHuo/MyLeafy/pull/87) 增加社区原文件保存、重叠教室排课及已发行关联键迁移；详情 2×2、时间设置顺序、启动横滑与 0.14 秒回到动画同步调整。iCloud 记录字段、SwiftData schema、Widget archive 和共享协议形状未改变。Android、VPN 和服务端本轮未修改，不将 iOS 证据扩大到其他端。

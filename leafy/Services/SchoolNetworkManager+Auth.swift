@@ -12,6 +12,7 @@ extension SchoolNetworkManager {
         }
         let id = UUID()
         authenticationOperationID = id
+        if connectionMode == .serverVPN { cookiePersistenceAllowed = false }
         return id
     }
 
@@ -28,10 +29,18 @@ extension SchoolNetworkManager {
     }
 
     func fetchCaptcha(for portal: SchoolPortal) async throws -> (key: String, image: UIImage) {
+        try await withAcademicConnection(kind: nil, retainingForLogin: true) {
+            try await fetchCaptchaInCurrentConnection(for: portal)
+        }
+    }
+
+    private func fetchCaptchaInCurrentConnection(for portal: SchoolPortal) async throws
+        -> (key: String, image: UIImage) {
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式不连接学校教务验证码。")
         }
 
+        let previousPersistenceAllowed = cookiePersistenceAllowed
         let operationID = try beginAuthenticationOperation()
         defer { finishAuthenticationOperation(operationID) }
         let scope = CampusOperationScope()
@@ -49,6 +58,7 @@ extension SchoolNetworkManager {
             // not mistaken for a real logout.
             try scope.check()
             guard authenticationOperationID == operationID else { throw CancellationError() }
+            cookiePersistenceAllowed = previousPersistenceAllowed
             persistedCookieValues = previousCookies
             for url in [URL(string: baseURL), URL(string: graduateBaseURL)].compactMap({ $0 }) {
                 syncPersistedCookiesToStorage(for: url)
@@ -143,6 +153,19 @@ extension SchoolNetworkManager {
 
     func performLogin(account: String, password: String, captcha: String, key: String,
                       portal: SchoolPortal) async throws -> Bool {
+        try await withAcademicConnection(kind: nil) {
+            try await performLoginInCurrentConnection(
+                account: account,
+                password: password,
+                captcha: captcha,
+                key: key,
+                portal: portal
+            )
+        }
+    }
+
+    private func performLoginInCurrentConnection(account: String, password: String, captcha: String, key: String,
+                                                 portal: SchoolPortal) async throws -> Bool {
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("请先退出演示模式，再连接校园网登录教务系统。")
         }

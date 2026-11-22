@@ -6,6 +6,8 @@ Last verified: 2026-10-23 (Android three-tab/parity batch verified on API 36 emu
 
 ## Current Focus
 
+- **北林非校园网教务同步（2026-11-10，接入验证）**：ECS 通过学校官方 HTTPS 网页 VPN 完成本人 VPN 认证、强智登录及 `2026-2027-1` 课表页面读取，POST 退出得到明确成功；最终教务验证码使用人工核对，不能记为自动识别通过。未采用严格证书验证失败的用户态隧道候选，不改宿主机路由。2026-11-22 恢复任务，仅实施 iOS 与必要后端，Android 延后；任务分支已接入独立连接器及本科设置/登录/课表手动刷新，累计 134 项后端测试和 iOS 测试包编译通过。当前提交 CI、XCTest 执行、手机 Cookie 复用、多学生真实会话、staging、真机与发行仍待验收；见 [设计与证据](../docs/design/bjfu-academic-vpn-sync.md)、[#79](https://github.com/IsaacHuo/MyLeafy/issues/79) / [#80](https://github.com/IsaacHuo/MyLeafy/issues/80)。
+
 - **iOS 3.2.8 图片与课表纠错（2026-11-22，待真机验收）**：社区图片预览新增原文件保存及长按入口；完整排课身份区分教室和班级，重叠周并列显示，旧备注/提醒在本机、课表事务和 iCloud 接收时安全迁移。课程详情改为四格自适应等高的 2×2、逐节完整时间及提醒先于备注；时间视图将设置卡片放在学期块之后。横滑使用当前布局宽度，配置/数据更新等待空闲；回到使用 0.14 秒可中断短滑动。跟踪 [#88](https://github.com/IsaacHuo/MyLeafy/issues/88)，累计在 [草稿 PR #87](https://github.com/IsaacHuo/MyLeafy/pull/87)，保留既有日历修复，不涉及 VPN、Android 或后台。任务 SwiftFormat/diff、plist 和本地化检查通过；Xcode 27.1、arm64/iOS 17 无签名 `build-for-testing` 通过（App、Widget、分享扩展和测试目标），最终增量日志无警告/错误。新增 17 项定向回归仅编译，未启动 Simulator、未执行 XCTest；源码版本为 3.2.8 / build 1，App、Widget 和分享扩展一致；用户已授权将本轮纠错独立集成 main，实际集成以 PR/Git 证据为准。真机视觉、相册权限、迁移/iCloud 与实际滑动表现仍待所有者验收，未 Archive 或正式发布。
 
 - **iOS 3.2.8 日历导出纠错（2026-11-22，待真机验收）**：课表导出新增课程/考试/格子日程多选及可写目标日历，按所选周次与类别更新、迁移和去重；旧版无身份 scope 的事件需显示数量确认后接管。课表与个人日程的日历导出不携带通知提醒或定位，更新时清除已有字段，TXT 与 App 内数据保留。跟踪 [#86](https://github.com/IsaacHuo/MyLeafy/issues/86)，不涉及 VPN 分支或学校课表更新时效。任务文件格式与 diff 检查通过；Xcode 27.1、arm64/iOS 17 无签名 `build-for-testing` 通过（App、Widget、分享扩展与测试目标），最终增量日志无警告/错误。新增 11 项定向回归代码仅编译，未启动 Simulator、未执行 XCTest；视觉/系统日历实测待所有者验收；用户已授权随 3.2.8 源码集成 main，正式发行另行记录。
