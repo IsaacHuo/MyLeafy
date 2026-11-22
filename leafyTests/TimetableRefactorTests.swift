@@ -54,6 +54,17 @@ final class TimetableTableParserTests: XCTestCase {
         }
     }
 
+    func testOverlappingRandomProcessArrangementsKeepBothRoomsAndOriginalWeeks() throws {
+        let content = course("随机过程B(必修)", weeks: "2,5-12(周)", teacher: "教师甲", room: "二教501")
+            + "<br>-------------<br>-------------<br>"
+            + course("随机过程B(必修)", weeks: "11-12(周)", teacher: "教师甲", room: "二教108")
+        let records = try HTMLParser.parseTimetableRecords(html: table(courses: [3: [2: content]]))
+        XCTAssertEqual(records.count, 2)
+        XCTAssertEqual(records.first { $0.room == "501" }?.weeks, [2] + Array(5 ... 12))
+        XCTAssertEqual(records.first { $0.room == "108" }?.weeks, [11, 12])
+        XCTAssertTrue(records.allSatisfy { $0.location == "二教" && $0.dayOfWeek == 2 && $0.duration == [6, 7] })
+    }
+
     func testOddEvenWeeksAndDifferentRoomsInOneCellRemainSeparate() throws {
         let content = course("同名课程", weeks: "1-8(单周)", room: "二教101")
             + "<hr>" + course("同名课程", weeks: "1-8(双周)", room: "二教202")
@@ -1698,7 +1709,7 @@ extension PerformanceRefactorTests {
 
         let draft = try XCTUnwrap(currentWeekDrafts.first)
         XCTAssertEqual(draft.title, "森林生态学")
-        XCTAssertEqual(draft.location, "二教 101")
+        XCTAssertEqual(draft.location, "")
         XCTAssertTrue(draft.notes.contains("教师：陈老师"))
         XCTAssertTrue(draft.notes.contains("节次：第 1-2 节"))
         XCTAssertTrue(draft.notes.contains("周次：第 2 周"))
@@ -1708,12 +1719,12 @@ extension PerformanceRefactorTests {
         let reminderDraft = try XCTUnwrap(currentWeekDrafts
             .first { $0.occurrenceKey == "cellReminder:\(reminder.id.uuidString.lowercased())" })
         XCTAssertEqual(reminderDraft.title, "预习植物分类")
-        XCTAssertEqual(reminderDraft.location, "图书馆二层")
+        XCTAssertEqual(reminderDraft.location, "")
         XCTAssertTrue(reminderDraft.notes.contains("类型：日程"))
-        XCTAssertTrue(reminderDraft.notes.contains("地点：图书馆二层"))
+        XCTAssertFalse(reminderDraft.notes.contains("地点：图书馆二层"))
         XCTAssertTrue(reminderDraft.notes.contains("节次：第 3-4 节"))
         XCTAssertTrue(reminderDraft.notes.contains("备注：带笔记本"))
-        XCTAssertTrue(reminderDraft.notes.contains("本地通知：提前 20 分钟"))
+        XCTAssertFalse(reminderDraft.notes.contains("本地通知：提前 20 分钟"))
         XCTAssertEqual(
             TimetableCalendarExportBuilder.occurrenceKey(from: reminderDraft.url),
             reminderDraft.occurrenceKey
@@ -1721,7 +1732,7 @@ extension PerformanceRefactorTests {
 
         let examDraft = try XCTUnwrap(currentWeekDrafts.first { $0.occurrenceKey == "exam:7" })
         XCTAssertEqual(examDraft.title, "考试：森林生态学")
-        XCTAssertEqual(examDraft.location, "二教 201")
+        XCTAssertEqual(examDraft.location, "")
         XCTAssertTrue(examDraft.notes.contains("类型：考试"))
         XCTAssertTrue(examDraft.notes.contains("课程编号：FOREST-001"))
         XCTAssertEqual(TimetableCalendarExportBuilder.occurrenceKey(from: examDraft.url), examDraft.occurrenceKey)

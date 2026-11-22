@@ -128,13 +128,13 @@
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MyLeafy needs permission to save feedback images and cards you create to Photos."
+            "value" : "MyLeafy needs permission to save images you choose and cards you create to Photos."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MyLeafy 需要将反馈图片和你生成的图文卡片保存到相册。"
+            "value" : "MyLeafy 需要将你选择的图片和生成的卡片保存到相册。"
           }
         }
       }

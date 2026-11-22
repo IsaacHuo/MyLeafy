@@ -19,7 +19,12 @@ import {
   backupStatus,
   maintenanceStatus,
 } from "./monitoring/sources";
-import { observations, observeEvents, type Sample } from "./monitoring/alerts";
+import {
+  observations,
+  observeEvents,
+  retireLegacyLatencyAlerts,
+  type Sample,
+} from "./monitoring/alerts";
 import { accessMetrics } from "./monitoring/metrics";
 import { queueDailyReport, deliverMail } from "./monitoring/mail";
 
@@ -32,6 +37,7 @@ const directory = resolve(
   process.env.MONITOR_DIRECTORY ?? `/var/lib/myleafy-monitor/${environment}`,
 );
 const store = new MonitorStore(join(directory, "monitoring.sqlite"));
+retireLegacyLatencyAlerts(store);
 if (process.argv.includes("--test-notifications")) {
   const commit = process.argv[process.argv.indexOf("--test-notifications") + 1];
   if (!/^[a-f0-9]{40}$/.test(commit ?? ""))

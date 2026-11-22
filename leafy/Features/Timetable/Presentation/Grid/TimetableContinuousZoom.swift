@@ -489,6 +489,8 @@ final class TimetableContinuousViewportController {
 
     func returnToToday(_ today: Date = Date()) {
         stopAnimation()
+        ignoresPagingUntilEnd = false
+        ignoresMagnificationUntilEnd = false
         zoomProgress = zoomProgress >= 0.5 ? 1 : 0
         phase = .idle
         let normalizedToday = calendar.startOfDay(for: today)

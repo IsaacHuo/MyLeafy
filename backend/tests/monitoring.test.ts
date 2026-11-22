@@ -17,9 +17,13 @@ import {
   day,
 } from "../src/monitoring/model";
 import { deliverMail, queueDailyReport } from "../src/monitoring/mail";
-import { observations, type Sample } from "../src/monitoring/alerts";
+import {
+  observations,
+  retireLegacyLatencyAlerts,
+  type Sample,
+} from "../src/monitoring/alerts";
 import { accessLogs } from "../src/monitoring/sources";
-import { PrometheusClient } from "../src/monitoring/prometheus";
+import { metricQueries, PrometheusClient } from "../src/monitoring/prometheus";
 import { adminMonitoring } from "../src/admin-monitoring";
 import { readFileSync } from "node:fs";
 import routeTemplates from "../src/monitoring/routes.json";
@@ -253,6 +257,108 @@ describe("monitoring privacy, range and sources", () => {
   });
 });
 describe("alert lifecycle and mail ledger", () => {
+  it("excludes WebSocket lifetimes from reported HTTP latency and the alert sample minimum", () => {
+    const { store } = database();
+    const sample: Sample = {
+      timestamp: now,
+      cpu: null,
+      memory: null,
+      disk: null,
+      services: {},
+      backup: { successAt: null, failed: null },
+      maintenanceUntil: null,
+      collectionError: null,
+    };
+    const websocket = normalizeLog(
+      requestLog({
+        ts: (now - 1_000) / 1000,
+        route: "/v1/events/:scope",
+        status: 101,
+        duration: 300,
+      }),
+      "production",
+    )!;
+    const http = { ...websocket, route: "/v1/community/feed", status: 200 };
+    const observeLatency = (timestamp = now) => {
+      const observation = observations(store, { ...sample, timestamp }).find(
+        (entry) => entry.key === "http-latency",
+      )!;
+      store.observe(observation, timestamp);
+      return observation;
+    };
+    store.ingest(Array(15).fill(websocket));
+    expect(store.summary(now - day, now).p95).toBeNull();
+    store.ingest(Array(99).fill({ ...http, duration: 0.012 }));
+    expect(store.summary(now - day, now)).toMatchObject({
+      requests: 114,
+      latencySamples: 99,
+      p50: 0.012,
+      p95: 0.012,
+      p99: 0.012,
+      errors: 0,
+    });
+    expect(observeLatency().failing).toBe(false);
+
+    const nextWindow = now + 600_000;
+    const slowHttp = { ...http, timestamp: nextWindow - 1_000, duration: 3 };
+    store.ingest([
+      { ...websocket, timestamp: slowHttp.timestamp },
+      ...Array(99).fill(slowHttp),
+    ]);
+    expect(observeLatency(nextWindow)).toMatchObject({ failing: false, value: 3 });
+    store.ingest([{ ...slowHttp, status: 500 }]);
+    expect(observeLatency(nextWindow)).toMatchObject({ failing: true, value: 3 });
+    expect(
+      store.db.prepare("SELECT kind,status FROM deliveries").all(),
+    ).toEqual([{ kind: "alert", status: "pending" }]);
+    expect(store.summary(now, nextWindow).errors).toBe(1);
+
+    const queries = metricQueries("production");
+    for (const query of [queries.p50, queries.p95, queries.p99])
+      expect(query).toContain('status!="101"');
+  });
+  it("retires legacy latency alerts once and leaves them out of new mail", () => {
+    const { store } = database();
+    const rule = {
+      key: "http-latency",
+      title: "Latency",
+      failing: true,
+      forMs: 0,
+    };
+    store.observe(rule, now);
+    store.enqueue("recovery:http-latency:old", "recovery", "Latency", "", now);
+    store.enqueue("report:production:old", "report", "Report", "", now);
+    retireLegacyLatencyAlerts(store, now + 1_000);
+    expect(
+      store.db.prepare("SELECT resolvedAt FROM alerts").get(),
+    ).toEqual({ resolvedAt: now + 1_000 });
+    expect(
+      store.db.prepare("SELECT kind,status FROM deliveries ORDER BY kind").all(),
+    ).toEqual([
+      { kind: "alert", status: "superseded" },
+      { kind: "recovery", status: "superseded" },
+      { kind: "report", status: "pending" },
+    ]);
+    store.observe(rule, now + 2_000);
+    retireLegacyLatencyAlerts(store, now + 3_000);
+    expect(
+      store.db
+        .prepare("SELECT firstSeen FROM alerts WHERE resolvedAt IS NULL")
+        .get(),
+    ).toEqual({ firstSeen: now + 2_000 });
+    expect(
+      store.db
+        .prepare("SELECT status FROM deliveries WHERE id=?")
+        .get(`alert:http-latency:${now + 2_000}:0`),
+    ).toEqual({ status: "pending" });
+    const report = queueDailyReport(store, "production", now + day);
+    const { summary } = store.db
+      .prepare("SELECT summary FROM reports WHERE id=?")
+      .get(report) as { summary: string };
+    expect(JSON.parse(summary).alerts).toEqual([
+      { title: rule.title, firstSeen: now + 2_000, resolvedAt: null },
+    ]);
+  });
   it("marks a report incomplete when a later restart reveals a gap covering its whole period", () => {
     const { store } = database();
     store.set("startedAt", now - 3 * day);

@@ -1,6 +1,8 @@
 import { type Observation, type LogEntry } from "./model";
 import { type MonitorStore } from "./store";
 
+export const httpLatencyCutoverKey = "httpLatencyExcludesUpgradesAt";
+
 export type Sample = {
   timestamp: number;
   cpu: number | null;
@@ -68,7 +70,7 @@ export function observations(
   observations.push({
     key: "http-latency",
     title: "接口 P95 响应超过 2 秒",
-    failing: long.requests >= 100 ? long.p95 > 2 : false,
+    failing: long.latencySamples >= 100 && long.p95 !== null && long.p95 > 2,
     forMs: 0,
     value: long.p95 ?? undefined,
   });
@@ -119,6 +121,28 @@ export function observations(
   });
   return observations;
 }
+
+export function retireLegacyLatencyAlerts(
+  store: MonitorStore,
+  now = Date.now(),
+) {
+  store.db.transaction(() => {
+    if (store.get(httpLatencyCutoverKey) !== undefined) return;
+    // Reassess any active incident using the corrected sample on the first tick.
+    store.db
+      .prepare(
+        "UPDATE alerts SET resolvedAt=? WHERE key='http-latency' AND resolvedAt IS NULL",
+      )
+      .run(now);
+    store.db
+      .prepare(
+        "UPDATE deliveries SET status='superseded',error='latency_definition_changed',leaseUntil=NULL WHERE status='pending' AND (id GLOB 'alert:http-latency:*' OR id GLOB 'recovery:http-latency:*')",
+      )
+      .run();
+    store.set(httpLatencyCutoverKey, now);
+  }).immediate();
+}
+
 export function observeEvents(
   store: MonitorStore,
   entries: LogEntry[],

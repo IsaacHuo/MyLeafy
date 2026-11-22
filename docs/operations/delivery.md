@@ -45,11 +45,13 @@ GitHub Environments 为 `staging`、`production`、`android-candidates`、`andro
 
 ## ECS：验收指定提交
 
-在 **Prepare or publish accepted ECS version** 选择 staging 并填写精确源码 SHA。工作流核对 main 来源和该提交 `CI result`，完整验证后端、迁移、网站和浏览器，构建并保存带 SHA-256/逐文件清单的产物，部署到独立测试目录。
+在 **Prepare or publish accepted ECS version** 选择 staging 并填写精确源码 SHA。工作流核对 main 来源和该提交 `CI result`，完整验证后端、迁移、网站和浏览器。构建任务先保存带 SHA-256 和逐文件清单的产物，发布任务再下载并部署到独立测试目录。
 
 验收后选择 production，填写同一 `commit`、成功的 `staging_run` 及 `accepted=true`。所有者在 GitHub production Environment 批准；production 下载 staging 的原归档，不重新构建，核对后安装依赖、备份、停服务、迁移、切换 current 并检查健康。按环境串行，失败不自动回退数据库。
 
 部署报告包含来源提交、上一产物、校验及健康结果，网站 `/release.json` 与 API `/health` 必须一致。Caddy 和 DNS 的初次启用由操作者单独核验。旧 Cloudflare 工作流不能用于当前源码。详细步骤见 [ECS 交付](ecs-delivery.md)。
+
+当 GitHub runner 无法上传 OSS 时，选择 `preloaded=true` 启动 staging。下载该次构建保存的 `ecs-package-<commit>`，将归档的 SHA-256 与同包的 `.sha256` 核对后，用本机 Workbench 上传到 ECS 的 `/var/tmp/myleafy-<sha256>.tar.gz`。归档须为 root 所有，组和其他用户不可写。如果发布任务已因文件缺失退出，重跑该次运行的失败任务，以复用原归档。staging 成功后，production 使用同一 `commit`、`staging_run` 和 `preloaded=true`，走正常所有者审批并复用 ECS 上的同一文件。安装器重新验证摘要及清单。
 
 ## 发布前短清单
 

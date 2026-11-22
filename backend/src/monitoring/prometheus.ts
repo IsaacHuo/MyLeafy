@@ -4,6 +4,7 @@ export function metricQueries(environment: Environment) {
   const labels = `environment="${environment}"`;
   const trafficLabels =
     labels + ',route!~"/health|/release.json|/api/admin/.*"';
+  const latencyLabels = trafficLabels + ',status!="101"';
   return {
     cpu: '100 * (1 - avg(rate(node_cpu_seconds_total{job="host",mode="idle"}[5m])))',
     memory:
@@ -24,9 +25,9 @@ export function metricQueries(environment: Environment) {
     requests: `sum(rate(myleafy_http_requests_total{job="monitor",${trafficLabels}}[5m]))`,
     bytes: `sum(rate(myleafy_http_response_bytes_total{job="monitor",${trafficLabels}}[5m]))`,
     errors: `sum(rate(myleafy_http_requests_total{job="monitor",${trafficLabels},status=~"5.."}[5m])) / sum(rate(myleafy_http_requests_total{job="monitor",${trafficLabels}}[5m]))`,
-    p50: `histogram_quantile(0.50,sum by (le)(rate(myleafy_http_duration_seconds_bucket{job="monitor",${trafficLabels}}[5m])))`,
-    p95: `histogram_quantile(0.95,sum by (le)(rate(myleafy_http_duration_seconds_bucket{job="monitor",${trafficLabels}}[5m])))`,
-    p99: `histogram_quantile(0.99,sum by (le)(rate(myleafy_http_duration_seconds_bucket{job="monitor",${trafficLabels}}[5m])))`,
+    p50: `histogram_quantile(0.50,sum by (le)(rate(myleafy_http_duration_seconds_bucket{job="monitor",${latencyLabels}}[5m])))`,
+    p95: `histogram_quantile(0.95,sum by (le)(rate(myleafy_http_duration_seconds_bucket{job="monitor",${latencyLabels}}[5m])))`,
+    p99: `histogram_quantile(0.99,sum by (le)(rate(myleafy_http_duration_seconds_bucket{job="monitor",${latencyLabels}}[5m])))`,
   };
 }
 export type MetricKey = keyof ReturnType<typeof metricQueries>;

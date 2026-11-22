@@ -1237,6 +1237,14 @@ private extension URL {
 
 extension Course {
     var stableCourseKey: String {
+        let components = [courseName, teacher, classInfo, String(dayOfWeek),
+                          duration.sorted().map(String.init).joined(separator: "-"), location, room]
+            .map(\.normalizedCourseKeyComponent)
+        // Length prefixes avoid collisions when a school field itself contains a separator.
+        return sourceSemesterID + "|arrangement:v2|" + components.map { "\($0.utf8.count):\($0)" }.joined()
+    }
+
+    var previousStableCourseKey: String {
         "\(sourceSemesterID)|\(legacyStableCourseKey)"
     }
 

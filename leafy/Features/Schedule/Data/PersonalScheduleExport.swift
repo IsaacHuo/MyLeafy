@@ -63,7 +63,7 @@ struct PersonalScheduleExportView: View {
             }.disabled(busy)
             Section {
                 Text("导出全部现存个人日程，包含过去和未来。学校课程、考试和随记不包含在内。")
-                Text("没有结束时间的日程在 Apple 日历中按 45 分钟安排；TXT 保留原始信息。再次导出可更新已导出的事件。")
+                Text("没有结束时间的日程在 Apple 日历中按 45 分钟安排，不附带通知提醒或定位信息。TXT 保留原始信息。再次导出可更新已导出的事件。")
             }.font(.footnote).foregroundStyle(.secondary)
             if busy { ProgressView("正在导出") }
         }
