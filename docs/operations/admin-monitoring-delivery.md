@@ -2,6 +2,16 @@
 
 2026-11-04 初次交付，跟踪 #65。当次运行源码 `7e092f09ca64fa9d8cb836c03d982b818794818b`。
 
+## 严重故障邮件分级（2026-11-28）
+
+停用按应用日志次数触发的通用告警，预期的应用 4xx 继续可检索。严重故障即时邮件按事件去重，随后按原邮件接受回执与稳定恢复状态配对。普通告警保留在后台与北京时间 21:00 日报。 [#91](https://github.com/IsaacHuo/MyLeafy/issues/91) · [PR #92](https://github.com/IsaacHuo/MyLeafy/pull/92)
+
+staging 的 Ubuntu 完整验证通过，后端 129 项、网站单元 74 项、浏览器 93 项。由本机预上传同一归档并核对 SHA-256 `f38da67b54473031dda1f0410645e80be43821efa12c9012c81abdc7785bde1b`，重跑发布任务后安装器验收通过。staging 于北京时间 18:20:53 完成部署，官网 `/release.json` 和 API `/health` 均为 `3836b50c251851fc625446d59062afa965638796`。 [staging 46134012548](https://github.com/IsaacHuo/MyLeafy/actions/runs/46134012548)
+
+staging 监控正常采集，已有数据库新增确认时间字段，切换取消六封无原告警接受回执的旧恢复邮件。旧规则活跃记录为零，日报和历史回执保留。邮件分级与恢复配对使用隔离数据验证，staging 正常发信关闭。
+
+所有者接受 staging 后已发起生产流程，等待 GitHub production 环境审批。 [生产流程 46134931760](https://github.com/IsaacHuo/MyLeafy/actions/runs/46134931760)
+
 ## WebSocket 延迟告警修复（2026-11-22）
 
 [#85](https://github.com/IsaacHuo/MyLeafy/issues/85) 已在生产生效。日报、后台图表和告警的 HTTP 延迟排除 WebSocket 成功升级的 101。自动化验证覆盖真实慢请求仍触发告警，以及旧延迟通知和日报的切换。
