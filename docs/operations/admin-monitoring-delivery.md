@@ -10,7 +10,7 @@ staging 的 Ubuntu 完整验证通过，后端 129 项、网站单元 74 项、�
 
 staging 监控正常采集，已有数据库新增确认时间字段，切换取消六封无原告警接受回执的旧恢复邮件。旧规则活跃记录为零，日报和历史回执保留。邮件分级与恢复配对使用隔离数据验证，staging 正常发信关闭。
 
-所有者接受 staging 后已发起生产流程，等待 GitHub production 环境审批。 [生产流程 46134931760](https://github.com/IsaacHuo/MyLeafy/actions/runs/46134931760)
+所有者批准后，production 消费同一 staging 归档，于北京时间 18:30:39 完成安装核验。官网 `/release.json` 与 API `/health` 均返回 `3836b50c251851fc625446d59062afa965638796`。生产 API 与监控服务运行正常，健康探针通过，旧规则活跃记录与待发邮件均为零。北京时间 18:43 核对时，日报定时器正常且下一次触发为当日 21:00，新版本首封生产日报待实际发送。 [生产流程 46134931760](https://github.com/IsaacHuo/MyLeafy/actions/runs/46134931760)
 
 ## WebSocket 延迟告警修复（2026-11-22）
 
