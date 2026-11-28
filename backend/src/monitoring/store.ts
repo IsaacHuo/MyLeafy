@@ -1,9 +1,11 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { day, parseRange, type LogEntry, type Observation } from "./model";
+import { day, isSevereAlert, parseRange, type LogEntry, type Observation } from "./model";
 
 type Row = Record<string, any>;
+const alertPolicyCutoverKey = "severeAlertEmailPolicyAt";
+
 export class MonitorStore {
   readonly db: Database.Database;
   constructor(path: string) {
@@ -23,11 +25,16 @@ export class MonitorStore {
       CREATE INDEX IF NOT EXISTS logs_time ON logs(timestamp,id);
       CREATE INDEX IF NOT EXISTS logs_source_time ON logs(source,timestamp);
       CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS alerts(id TEXT PRIMARY KEY,key TEXT NOT NULL,title TEXT NOT NULL,firstSeen INTEGER NOT NULL,lastSeen INTEGER NOT NULL,resolvedAt INTEGER,recoveringAt INTEGER,lastNotified INTEGER,value REAL,conditionSince INTEGER,lastCheck INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS alerts(id TEXT PRIMARY KEY,key TEXT NOT NULL,title TEXT NOT NULL,firstSeen INTEGER NOT NULL,lastSeen INTEGER NOT NULL,resolvedAt INTEGER,recoveringAt INTEGER,lastNotified INTEGER,value REAL,conditionSince INTEGER,lastCheck INTEGER NOT NULL,confirmedAt INTEGER);
       CREATE UNIQUE INDEX IF NOT EXISTS alert_active_key ON alerts(key) WHERE resolvedAt IS NULL;
       CREATE TABLE IF NOT EXISTS deliveries(id TEXT PRIMARY KEY,kind TEXT NOT NULL,createdAt INTEGER NOT NULL,subject TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,nextAttempt INTEGER NOT NULL,providerId TEXT,error TEXT,leaseUntil INTEGER);
       CREATE INDEX IF NOT EXISTS delivery_due ON deliveries(status,nextAttempt);
       CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY,start INTEGER NOT NULL,end INTEGER NOT NULL,createdAt INTEGER NOT NULL,summary TEXT NOT NULL,deliveryId TEXT NOT NULL);`);
+    this.db.transaction(() => {
+      const columns = this.db.pragma("table_info(alerts)") as { name: string }[];
+      if (!columns.some((column) => column.name === "confirmedAt"))
+        this.db.exec("ALTER TABLE alerts ADD COLUMN confirmedAt INTEGER");
+    }).immediate();
     if (!this.get("startedAt")) this.set("startedAt", Date.now());
   }
   get<T = any>(key: string): T | undefined {
@@ -147,7 +154,7 @@ export class MonitorStore {
         .all(start, end),
       topErrors: this.db
         .prepare(
-          "SELECT source,event,code,count(*) AS count FROM logs WHERE level='error' AND timestamp>=? AND timestamp<? GROUP BY source,event,code ORDER BY count DESC LIMIT 10",
+          "SELECT source,event,code,count(*) AS count FROM logs WHERE level='error' AND timestamp>=? AND timestamp<? AND (source<>'application' OR status IS NULL OR status NOT BETWEEN 400 AND 499) GROUP BY source,event,code ORDER BY count DESC LIMIT 10",
         )
         .all(start, end),
     };
@@ -164,6 +171,44 @@ export class MonitorStore {
         "INSERT OR IGNORE INTO deliveries(id,kind,createdAt,subject,body,nextAttempt) VALUES(?,?,?,?,?,?)",
       )
       .run(id, kind, now, subject, body, now);
+  }
+  private hasSentAlert(incidentId: string) {
+    return this.db
+      .prepare("SELECT 1 FROM deliveries WHERE kind='alert' AND status='sent' AND id GLOB ? LIMIT 1")
+      .get(`alert:${incidentId}:*`) !== undefined;
+  }
+  retireLegacyAlertNotifications(now = Date.now()) {
+    this.db.transaction(() => {
+      if (this.get(alertPolicyCutoverKey) !== undefined) return;
+      this.db.prepare(
+        "UPDATE alerts SET resolvedAt=?,recoveringAt=NULL WHERE key GLOB 'repeated:*' AND resolvedAt IS NULL",
+      ).run(now);
+      const pending = this.db.prepare(
+        "SELECT id,kind FROM deliveries WHERE status='pending' AND kind IN ('alert','recovery') ORDER BY createdAt DESC,id DESC",
+      ).all() as { id: string; kind: "alert" | "recovery" }[];
+      const incident = this.db.prepare("SELECT key,resolvedAt FROM alerts WHERE id=?");
+      const supersede = this.db.prepare(
+        "UPDATE deliveries SET status='superseded',error='alert_email_policy_changed',leaseUntil=NULL WHERE id=?",
+      );
+      const keptAlerts = new Set<string>();
+      for (const delivery of pending) {
+        const recovery = delivery.kind === "recovery";
+        const incidentId = recovery
+          ? delivery.id.slice("recovery:".length)
+          : delivery.id.slice("alert:".length, delivery.id.lastIndexOf(":"));
+        const row = incident.get(incidentId) as { key: string; resolvedAt: number | null } | undefined;
+        if (row && isSevereAlert(row.key)) {
+          const sent = this.hasSentAlert(incidentId);
+          if (recovery && row.resolvedAt !== null && sent) continue;
+          if (!recovery && row.resolvedAt === null && !sent && !keptAlerts.has(incidentId)) {
+            keptAlerts.add(incidentId);
+            continue;
+          }
+        }
+        supersede.run(delivery.id);
+      }
+      this.set(alertPolicyCutoverKey, now);
+    }).immediate();
   }
   observe(observation: Observation, now = Date.now()) {
     const { key, title, value } = observation;
@@ -208,18 +253,12 @@ export class MonitorStore {
         const current = this.db
           .prepare("SELECT * FROM alerts WHERE key=? AND resolvedAt IS NULL")
           .get(key) as Row;
-        if (
-          now - current.conditionSince >= observation.forMs &&
-          (!current.lastNotified || now - current.lastNotified >= 3_600_000)
-        ) {
-          const id = `alert:${key}:${current.firstSeen}:${Math.floor((now - current.firstSeen) / 3_600_000)}`;
-          this.db
-            .prepare(
-              "UPDATE deliveries SET status='superseded',error='newer_alert_state' WHERE kind='alert' AND status='pending' AND id LIKE ?",
-            )
-            .run(`alert:${key}:${current.firstSeen}:%`);
+        if (now - current.conditionSince < observation.forMs) return;
+        if (current.confirmedAt === null && current.lastNotified === null)
+          this.db.prepare("UPDATE alerts SET confirmedAt=? WHERE id=?").run(now, current.id);
+        if (isSevereAlert(key) && current.lastNotified === null) {
           this.enqueue(
-            id,
+            `alert:${current.id}:0`,
             "alert",
             `[MyLeafy 异常] ${title}`,
             `${title}\n首次发现：${new Date(current.firstSeen).toISOString()}\n当前值：${value ?? "不适用"}\n详情：https://myleafy.space/admin/monitoring/alerts`,
@@ -242,12 +281,12 @@ export class MonitorStore {
             .run(now, row.id);
           this.db
             .prepare(
-              "UPDATE deliveries SET status='superseded',error='incident_recovered' WHERE kind='alert' AND status='pending' AND id LIKE ?",
+              "UPDATE deliveries SET status='superseded',error='incident_recovered',leaseUntil=NULL WHERE kind='alert' AND status='pending' AND id GLOB ?",
             )
-            .run(`alert:${key}:${row.firstSeen}:%`);
-          if (row.lastNotified)
+            .run(`alert:${row.id}:*`);
+          if (isSevereAlert(key) && this.hasSentAlert(row.id))
             this.enqueue(
-              `recovery:${key}:${row.firstSeen}`,
+              `recovery:${row.id}`,
               "recovery",
               `[MyLeafy 恢复] ${title}`,
               `${title}已稳定恢复 5 分钟。\n首次发现：${new Date(row.firstSeen).toISOString()}\n详情：https://myleafy.space/admin/monitoring/alerts`,
@@ -274,13 +313,22 @@ export class MonitorStore {
           )
           .get(item.deliveryId);
       }
-    else
-      for (const item of items)
-        item.notification = this.db
-          .prepare(
-            "SELECT status,error FROM deliveries WHERE id LIKE ? ORDER BY createdAt DESC LIMIT 1",
-          )
-          .get(`alert:${item.key}:${item.firstSeen}:%`);
+    else {
+      const cutover = this.get<number>(alertPolicyCutoverKey);
+      const alertDelivery = this.db.prepare(
+        "SELECT status,attempts,providerId,error,nextAttempt FROM deliveries WHERE id GLOB ? ORDER BY (status='sent') DESC,createdAt DESC LIMIT 1",
+      );
+      const recoveryDelivery = this.db.prepare(
+        "SELECT status,attempts,providerId,error,nextAttempt FROM deliveries WHERE id=?",
+      );
+      for (const item of items) {
+        item.confirmedAt ??= item.lastNotified;
+        item.notificationPolicy = isSevereAlert(item.key) ? "email" : "dashboard";
+        item.policyRetired = item.key.startsWith("repeated:") && item.resolvedAt === cutover;
+        item.notification = alertDelivery.get(`alert:${item.id}:*`);
+        item.recoveryNotification = recoveryDelivery.get(`recovery:${item.id}`);
+      }
+    }
     return {
       items,
       total: (
@@ -318,11 +366,14 @@ export class MonitorStore {
       for (const [table, column] of [
         ["alerts", "lastSeen"],
         ["reports", "createdAt"],
-        ["deliveries", "createdAt"],
       ])
         this.db
           .prepare(`DELETE FROM ${table} WHERE ${column}<?`)
           .run(now - 30 * day);
+      // An unresolved incident may need its original receipt to pair a future recovery.
+      this.db.prepare(
+        "DELETE FROM deliveries WHERE createdAt<? AND NOT (kind='alert' AND status='sent' AND EXISTS (SELECT 1 FROM alerts WHERE resolvedAt IS NULL AND deliveries.id GLOB ('alert:'||alerts.id||':*')))",
+      ).run(now - 30 * day);
     })();
     // Bound live pages, including index overhead; incremental vacuum bounds the file.
     const used = () =>

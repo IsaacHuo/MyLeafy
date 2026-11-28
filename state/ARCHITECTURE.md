@@ -294,7 +294,7 @@ Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 2
 - 客户端 `Services/Cloudflare/` 和有关类型名保留为内部标识，原域名与协议保持；不代表请求仍由 Cloudflare 承载。
 - 原 Cloudflare 已冻结写入、停用 Cron、解绑服务域名并禁用旧工作流；数据至少保留七天，清退另行确认。`support@myleafy.space` 已迁至阿里邮箱免费版，所有者确认收信与回复成功；阿里云权威 DNS 使用 qiye MX/SPF，Cloudflare Email Routing 已关闭、旧 Cloudflare MX/SPF/DKIM 已移除。验证码仍由 ECS 调用 Resend，其 DNS 与凭据保持。邮箱为独立云产品，换 ECS 不迁邮箱数据或密码；旧 Cloudflare Zone 随退役另行确认。
 
-监控源码使用独立 monitor/systemd、SQLite 和 Prometheus，采集网关、Node、主机与允许来源的脱敏日志。管理代理仅向超级管理员开放固定只读查询；采集与发信不阻塞业务 API。HTTP 延迟及告警样本数排除 WebSocket 成功升级的 101，保留访问记录与独立连接数。端口、保留与验证边界见 [Admin 监控](../docs/engineering/admin-monitoring.md)。
+监控源码使用独立 monitor/systemd、SQLite 和 Prometheus，采集网关、Node、主机与允许来源的脱敏日志。管理代理仅向超级管理员开放固定只读查询；采集与发信不阻塞业务 API。HTTP 延迟及告警样本数排除 WebSocket 成功升级的 101，保留访问记录与独立连接数。应用 4xx 保留为诊断日志，后台与日报保留普通阈值告警，即时邮件仅发送明确列出的严重故障。同一事件在原异常邮件获服务商接受且恢复稳定五分钟后发送恢复邮件。端口、保留与验证边界见 [Admin 监控](../docs/engineering/admin-monitoring.md)。
 
 ## 11. 当前行为约束
 

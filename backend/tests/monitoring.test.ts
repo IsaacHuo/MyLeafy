@@ -18,7 +18,10 @@ import {
 } from "../src/monitoring/model";
 import { deliverMail, queueDailyReport } from "../src/monitoring/mail";
 import {
+  healthFailures,
   observations,
+  observeEventRecovery,
+  observeEvents,
   retireLegacyLatencyAlerts,
   type Sample,
 } from "../src/monitoring/alerts";
@@ -59,6 +62,22 @@ const requestLog = (extra = {}) => ({
   status: 200,
   ...extra,
 });
+const emptySample = (timestamp = now): Sample => ({
+  timestamp,
+  cpu: null,
+  memory: null,
+  disk: null,
+  services: {},
+  backup: { successAt: null, failed: null },
+  maintenanceUntil: null,
+  collectionError: null,
+});
+const testMail = {
+  enabled: true,
+  key: "test-key",
+  from: "sender@example.com",
+  recipient: "owner@example.com",
+};
 describe("monitoring privacy, range and sources", () => {
   it("keeps source log templates aligned and never persists raw path tokens", () => {
     const text = readFileSync(
@@ -257,6 +276,212 @@ describe("monitoring privacy, range and sources", () => {
   });
 });
 describe("alert lifecycle and mail ledger", () => {
+  it("keeps repeated application rejections, cancellations and an isolated 5xx as diagnostics", () => {
+    const { store } = database();
+    const rejection = normalizeLog({
+      source: "application", event: "api_error", status: 403,
+      code: "invalid_ticket", request_id: "rejected-download", timestamp: now - 1000,
+    }, "production")!;
+    expect(rejection).toMatchObject({ level: "info", status: 403, code: "invalid_ticket" });
+    const rejectedRequest = normalizeLog(requestLog({
+      ts: (now - 1000) / 1000, route: "/v1/files/download", status: 403,
+    }), "production")!;
+    const cancellation = { ...rejectedRequest, status: 499 };
+    const serverError = normalizeLog({
+      source: "application", event: "api_error", status: 500,
+      code: "internal_error", timestamp: now - 1000,
+    }, "production")!;
+    const entries = [
+      ...Array(105).fill(rejectedRequest), ...Array(105).fill(rejection),
+      { ...rejection, level: "error" as const }, // Stored before the new classification.
+      cancellation, serverError, { ...rejectedRequest, status: 500, level: "error" as const },
+    ];
+    store.ingest(entries);
+    observeEvents(store, entries, now);
+    for (const entry of observations(store, emptySample())) store.observe(entry, now);
+    expect(store.db.prepare("SELECT * FROM alerts").all()).toHaveLength(0);
+    expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(0);
+    expect(store.list("logs", { code: "invalid_ticket" }, now).total).toBe(106);
+    expect(store.list("requests", { status: 499 }, now).total).toBe(1);
+    const id = queueDailyReport(store, "production", now);
+    const { summary } = store.db.prepare("SELECT summary FROM reports WHERE id=?").get(id) as { summary: string };
+    expect(JSON.parse(summary)).toMatchObject({ errors: 1, alerts: [] });
+    expect(summary).toContain("internal_error");
+    expect(summary).not.toContain("invalid_ticket");
+  });
+
+  it("emails on the existing 5xx rate threshold and waits for a known recovery window", () => {
+    const { store } = database();
+    const sample = emptySample();
+    const access = normalizeLog(requestLog({
+      ts: (now - 1000) / 1000, route: "/v1/files/download",
+    }), "production")!;
+    const check = (timestamp = now) => {
+      const rate = observations(store, { ...sample, timestamp }).find((entry) => entry.key === "http-errors")!;
+      store.observe(rate, timestamp);
+      return rate.failing;
+    };
+    store.ingest([...Array(95).fill(access), ...Array(5).fill({ ...access, status: 500 })]);
+    expect(check()).toBe(false);
+    store.ingest([{ ...access, status: 502 }]);
+    expect(check()).toBe(true);
+    expect(check(now + 300_000)).toBeNull();
+    expect(store.db.prepare("SELECT id,status FROM deliveries").all()).toEqual([
+      { id: `alert:http-errors:${now}:0`, status: "pending" },
+    ]);
+    expect(store.db.prepare("SELECT recoveringAt FROM alerts").get()).toEqual({ recoveringAt: null });
+  });
+
+  it("requires three consecutive bad probes outside maintenance and restarts the count after a gap", () => {
+    const { store } = database();
+    let previous: Sample | undefined;
+    const check = (offset: number, maintenanceUntil: number | null, healthy = false) => {
+      const sample = { ...emptySample(now + offset), maintenanceUntil };
+      const failures = healthFailures("api", healthy, sample, previous);
+      sample.services.api = { healthy, failures, restarts: null };
+      previous = sample;
+      const observation = observations(store, sample).find((entry) => entry.key === "health:api")!;
+      store.observe(observation, sample.timestamp);
+      return failures;
+    };
+    expect(check(0, null)).toBe(1);
+    expect(check(30_000, now + 100_000)).toBe(0);
+    expect(check(60_000, now + 100_000)).toBe(0);
+    expect(check(120_000, null)).toBe(1);
+    expect(check(240_000, null)).toBe(1);
+    expect(check(270_000, null)).toBe(2);
+    expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(0);
+    expect(check(300_000, null)).toBe(3);
+    expect(store.db.prepare("SELECT id FROM deliveries").all()).toEqual([
+      { id: `alert:health:api:${now + 300_000}:0` },
+    ]);
+    expect(check(330_000, null, true)).toBe(0);
+    expect(check(360_000, null)).toBe(1);
+    expect(store.db.prepare("SELECT recoveringAt FROM alerts").get()).toEqual({ recoveringAt: null });
+  });
+
+  it("emails resource and process emergencies while keeping single task and backup failures in the dashboard", () => {
+    const { store } = database();
+    const sample: Sample = {
+      ...emptySample(), disk: 96,
+      backup: { successAt: now - 27 * 3_600_000, failed: true },
+    };
+    observeEvents(store, [
+      { timestamp: now, source: "system", event: "oom", level: "error" },
+      { timestamp: now, source: "caddy", event: "unexpected_exit", level: "error" },
+      { timestamp: now, source: "application", event: "unexpected_exit", level: "error" },
+      { timestamp: now, source: "application", event: "scheduled_job_failed", code: "media", level: "error" },
+    ], now);
+    for (const entry of observations(store, sample)) store.observe(entry, now);
+    expect(store.db.prepare("SELECT id FROM deliveries ORDER BY id").all().map((row: any) => row.id)).toEqual([
+      `alert:backup-expired:${now}:0`, `alert:disk-critical:${now}:0`,
+      `alert:event:application:unexpected_exit:${now}:0`,
+      `alert:event:caddy:unexpected_exit:${now}:0`, `alert:event:system:oom:${now}:0`,
+    ]);
+    for (const key of ["backup-failed", "task:media"]) {
+      expect(store.db.prepare("SELECT confirmedAt FROM alerts WHERE key=?").get(key)).toEqual({ confirmedAt: now });
+    }
+    const caddy = { healthy: true, failures: 0, restarts: 1 };
+    const eventSample = { ...sample, services: { "myleafy-caddy.service": caddy } };
+    observeEventRecovery(store, { ...eventSample, timestamp: now + 30_000 }, "production");
+    observeEventRecovery(store, { ...eventSample, timestamp: now + 60_000, maintenanceUntil: now + 90_000 }, "production");
+    expect(store.db.prepare("SELECT recoveringAt FROM alerts WHERE key='event:caddy:unexpected_exit'").get()).toEqual({ recoveringAt: null });
+  });
+
+  it.each(["accepted", "waiting", "failed"])("pairs recovery only with an accepted alert across a restart (%s)", async (outcome) => {
+    const { store, directory } = database();
+    const rule = { key: "health:api", title: "API", failing: true, forMs: 0 };
+    const incidentId = `health:api:${now}`;
+    const request = vi.fn(async () => outcome === "failed"
+      ? Response.json({}, { status: 400 })
+      : Response.json({ id: "provider-alert" }));
+    store.observe(rule, now);
+    if (outcome !== "waiting") await deliverMail(store, testMail, now, request);
+    const reopened = new MonitorStore(join(directory, "monitor.sqlite"));
+    try {
+      reopened.observe(rule, now + 3_600_000);
+      for (let offset = 30_000; offset <= 330_000; offset += 30_000)
+        reopened.observe({ ...rule, failing: false }, now + 3_600_000 + offset);
+      expect(reopened.db.prepare("SELECT id,status FROM deliveries ORDER BY id").all()).toEqual([
+        { id: `alert:${incidentId}:0`, status: outcome === "accepted" ? "sent" : outcome === "waiting" ? "superseded" : "failed" },
+        ...(outcome === "accepted" ? [{ id: `recovery:${incidentId}`, status: "pending" }] : []),
+      ]);
+      if (outcome === "accepted") {
+        await deliverMail(reopened, testMail, now + 4_000_000, async () => Response.json({ id: "provider-recovery" }));
+        expect(reopened.history("alerts", {}, now + 4_000_000).items[0]).toMatchObject({
+          confirmedAt: now,
+          notificationPolicy: "email",
+          notification: { status: "sent", providerId: "provider-alert" },
+          recoveryNotification: { status: "sent", providerId: "provider-recovery" },
+        });
+      }
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it("preserves the accepted receipt of a still-open alert through retention", async () => {
+    const { store } = database();
+    const rule = { key: "disk-critical", title: "Disk", failing: true, forMs: 0 };
+    store.observe(rule, now);
+    await deliverMail(store, testMail, now, async () => Response.json({ id: "provider-alert" }));
+    store.observe(rule, now + 31 * day);
+    store.retain(now + 31 * day);
+    expect(store.db.prepare("SELECT status FROM deliveries").all()).toEqual([{ status: "sent" }]);
+    for (let offset = 30_000; offset <= 330_000; offset += 30_000)
+      store.observe({ ...rule, failing: false }, now + 31 * day + offset);
+    expect(store.db.prepare("SELECT status FROM deliveries WHERE kind='recovery'").get()).toEqual({ status: "pending" });
+  });
+
+  it("upgrades an old monitoring database and retires only obsolete pending mail", () => {
+    const { store, directory } = database();
+    const observe = (key: string) => {
+      store.observe({ key, title: key, failing: true, forMs: 0 }, now);
+      return `${key}:${now}`;
+    };
+    const obsolete = observe("repeated:application:api_error:invalid_ticket");
+    const dashboard = observe("backup-failed");
+    const active = observe("health:api");
+    const delivered = observe("disk-critical");
+    const resolved = observe("health:website");
+    const orphan = observe("backup-expired");
+    for (const key of [obsolete, dashboard])
+      store.enqueue(`alert:${key}:0`, "alert", "Old alert", "", now);
+    for (const key of [obsolete, active, delivered])
+      store.enqueue(`alert:${key}:1`, "alert", "Old reminder", "", now + 500);
+    for (const key of [obsolete, delivered, resolved])
+      store.db.prepare("UPDATE deliveries SET status='sent',providerId='old-receipt' WHERE id=?").run(`alert:${key}:0`);
+    for (const key of [resolved, orphan])
+      store.db.prepare("UPDATE alerts SET resolvedAt=? WHERE id=?").run(now + 500, key);
+    for (const key of [obsolete, resolved, orphan])
+      store.enqueue(`recovery:${key}`, "recovery", "Old recovery", "", now + 500);
+    store.enqueue("report:production:old", "report", "Report", "", now);
+    store.db.exec("ALTER TABLE alerts DROP COLUMN confirmedAt");
+
+    const reopened = new MonitorStore(join(directory, "monitor.sqlite"));
+    try {
+      const cutover = now + 1000;
+      reopened.retireLegacyAlertNotifications(cutover);
+      const pending = () => reopened.db.prepare("SELECT id FROM deliveries WHERE status='pending' ORDER BY id").all();
+      expect(pending()).toEqual([
+        { id: `alert:${active}:1` }, { id: `recovery:${resolved}` }, { id: "report:production:old" },
+      ]);
+      const old = reopened.history("alerts", {}, now + 2000).items.find((row) => row.id === obsolete);
+      expect(old).toMatchObject({
+        resolvedAt: cutover, policyRetired: true,
+        notification: { status: "sent", providerId: "old-receipt" },
+        recoveryNotification: { status: "superseded", error: "alert_email_policy_changed" },
+      });
+      expect(reopened.history("alerts", {}, now + 2000).items.find((row) => row.id === active)).toMatchObject({ confirmedAt: now });
+      reopened.observe({ key: "health:api", title: "API", failing: true, forMs: 0 }, now + 3_600_000);
+      reopened.retireLegacyAlertNotifications(now + 3_600_000);
+      expect(pending()).toHaveLength(3);
+      expect(reopened.db.prepare("SELECT resolvedAt FROM alerts WHERE id=?").get(obsolete)).toEqual({ resolvedAt: cutover });
+    } finally {
+      reopened.close();
+    }
+  });
+
   it("excludes WebSocket lifetimes from reported HTTP latency and the alert sample minimum", () => {
     const { store } = database();
     const sample: Sample = {
@@ -308,9 +533,10 @@ describe("alert lifecycle and mail ledger", () => {
     expect(observeLatency(nextWindow)).toMatchObject({ failing: false, value: 3 });
     store.ingest([{ ...slowHttp, status: 500 }]);
     expect(observeLatency(nextWindow)).toMatchObject({ failing: true, value: 3 });
-    expect(
-      store.db.prepare("SELECT kind,status FROM deliveries").all(),
-    ).toEqual([{ kind: "alert", status: "pending" }]);
+    expect(store.db.prepare("SELECT confirmedAt FROM alerts").get()).toEqual({
+      confirmedAt: nextWindow,
+    });
+    expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(0);
     expect(store.summary(now, nextWindow).errors).toBe(1);
 
     const queries = metricQueries("production");
@@ -326,6 +552,7 @@ describe("alert lifecycle and mail ledger", () => {
       forMs: 0,
     };
     store.observe(rule, now);
+    store.enqueue(`alert:http-latency:${now}:0`, "alert", "Latency", "", now);
     store.enqueue("recovery:http-latency:old", "recovery", "Latency", "", now);
     store.enqueue("report:production:old", "report", "Report", "", now);
     retireLegacyLatencyAlerts(store, now + 1_000);
@@ -350,7 +577,7 @@ describe("alert lifecycle and mail ledger", () => {
       store.db
         .prepare("SELECT status FROM deliveries WHERE id=?")
         .get(`alert:http-latency:${now + 2_000}:0`),
-    ).toEqual({ status: "pending" });
+    ).toBeUndefined();
     const report = queueDailyReport(store, "production", now + day);
     const { summary } = store.db
       .prepare("SELECT summary FROM reports WHERE id=?")
@@ -382,7 +609,7 @@ describe("alert lifecycle and mail ledger", () => {
   });
   it("requires continuous observations for both firing and recovery after an unknown interval", () => {
     const { store } = database(),
-      rule = { key: "memory", title: "Memory", failing: true, forMs: 120_000 };
+      rule = { key: "health:api", title: "API", failing: true, forMs: 120_000 };
     store.observe(rule, now);
     store.observe(rule, now + 30_000);
     store.observe({ ...rule, failing: null }, now + 60_000);
@@ -391,6 +618,7 @@ describe("alert lifecycle and mail ledger", () => {
     expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(0);
     store.observe(rule, now + 210_000);
     expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(1);
+    store.db.prepare("UPDATE deliveries SET status='sent'").run();
     store.observe({ ...rule, failing: false }, now + 240_000);
     store.observe({ ...rule, failing: null }, now + 270_000);
     for (let offset = 300_000; offset < 600_000; offset += 30_000)
@@ -446,14 +674,17 @@ describe("alert lifecycle and mail ledger", () => {
     expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(0);
     store.observe(observation, now + 600_000);
     store.observe(observation, now + 630_000);
-    expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(1);
+    expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(0);
+    expect(store.db.prepare("SELECT confirmedAt,lastNotified FROM alerts").get()).toEqual({
+      confirmedAt: now + 600_000, lastNotified: null,
+    });
     store.observe({ ...observation, failing: null }, now + 900_000);
     expect(
       (store.db.prepare("SELECT * FROM alerts").get() as any).recoveringAt,
     ).toBeNull();
     for (let offset = 1_000_000; offset <= 1_300_000; offset += 30_000)
       store.observe({ ...observation, failing: false }, now + offset);
-    expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(2);
+    expect(store.db.prepare("SELECT * FROM deliveries").all()).toHaveLength(0);
     store.observe(observation, now + 2_000_000);
     expect(store.db.prepare("SELECT * FROM alerts").all()).toHaveLength(2);
   });

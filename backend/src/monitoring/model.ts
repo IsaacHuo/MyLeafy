@@ -27,6 +27,21 @@ export type Observation = {
   immediate?: boolean;
 };
 export const day = 86_400_000;
+const severeAlertKeys = new Set([
+  "health:website",
+  "health:api",
+  "http-errors",
+  "disk-critical",
+  "backup-expired",
+  "event:system:oom",
+  "event:application:oom",
+  "event:caddy:oom",
+  "event:application:unexpected_exit",
+  "event:caddy:unexpected_exit",
+]);
+export function isSevereAlert(key: string) {
+  return severeAlertKeys.has(key);
+}
 export const jobKeys: Record<string, string> = {
   "* * * * *": "signals",
   "17 * * * *": "invites",
@@ -180,15 +195,27 @@ export function normalizeLog(
   const event = safeToken(input.event),
     code = safeToken(input.code);
   if (!event) return null;
+  const source = safeToken(input.source) ?? "application";
+  const status: number | undefined = Number.isInteger(input.status)
+    ? input.status
+    : undefined;
+  const clientResponse =
+    source === "application" && status !== undefined && status >= 400 && status < 500;
   const error = /failed|error|oom|unexpected_exit/.test(event);
   return {
     timestamp,
-    source: safeToken(input.source) ?? "application",
-    level: error ? "error" : input.level === "warning" ? "warning" : "info",
+    source,
+    level: clientResponse
+      ? "info"
+      : error
+        ? "error"
+        : input.level === "warning"
+          ? "warning"
+          : "info",
     event,
     code: jobKeys[String(input.job)] ?? code,
     requestId: safeToken(input.request_id, 128),
-    status: Number.isInteger(input.status) ? input.status : undefined,
+    status,
   };
 }
 export function parseRange(params: Record<string, unknown>, now = Date.now()) {

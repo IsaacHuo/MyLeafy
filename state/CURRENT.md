@@ -12,7 +12,8 @@ Last verified: 2026-10-23 (Android three-tab/parity batch verified on API 36 emu
 
 - **iOS 3.2.8 日历导出纠错（2026-11-22，待真机验收）**：课表导出新增课程/考试/格子日程多选及可写目标日历，按所选周次与类别更新、迁移和去重；旧版无身份 scope 的事件需显示数量确认后接管。课表与个人日程的日历导出不携带通知提醒或定位，更新时清除已有字段，TXT 与 App 内数据保留。跟踪 [#86](https://github.com/IsaacHuo/MyLeafy/issues/86)，不涉及 VPN 分支或学校课表更新时效。任务文件格式与 diff 检查通过；Xcode 27.1、arm64/iOS 17 无签名 `build-for-testing` 通过（App、Widget、分享扩展与测试目标），最终增量日志无警告/错误。新增 11 项定向回归代码仅编译，未启动 Simulator、未执行 XCTest；视觉/系统日历实测待所有者验收；用户已授权随 3.2.8 源码集成 main，正式发行另行记录。
 
-- **HTTP 延迟告警（2026-11-22，生产已验证）**：日报、后台图表和告警的 HTTP 延迟排除 WebSocket 成功升级的 101；常规慢请求告警继续生效。staging 与 production 均运行 `92283b2e00cdf8ecc0c7d4c7643db9933088946f`，生产采集正常，切换取消 12 封待发的旧口径通知。见 [交付记录](../docs/operations/admin-monitoring-delivery.md#websocket-延迟告警修复2026-11-22) 和 [#85](https://github.com/IsaacHuo/MyLeafy/issues/85)。
+- **严重故障邮件分级（源码）**：常规应用 4xx 留在日志，普通阈值在后台和日报展示，严重故障才发即时邮件。恢复邮件与原异常邮件的发送回执配对，日报仍为北京时间 21:00。staging 与生产生效情况单独记录。见 [监控规则](../docs/engineering/admin-monitoring.md#告警与日报) 和 [#91](https://github.com/IsaacHuo/MyLeafy/issues/91)。
+- **HTTP 延迟告警（2026-11-22，生产已验证）**：日报、后台图表和告警的 HTTP 延迟排除 WebSocket 成功升级的 101；常规慢请求告警继续生效。当次 staging 与 production 运行 `92283b2e00cdf8ecc0c7d4c7643db9933088946f`，生产采集正常，切换取消 12 封待发的旧口径通知。见 [交付记录](../docs/operations/admin-monitoring-delivery.md#websocket-延迟告警修复2026-11-22) 和 [#85](https://github.com/IsaacHuo/MyLeafy/issues/85)。
 
 - **Admin Android 版本入口（2026-11-07，生产已验收）**：Refine 侧栏补回「业务管理 → Android 版本」，继续使用 `/admin/android-releases` 独立页面和原有权限；运营/只读可查看，只有超级管理员可发布、重试和撤回。生产与 staging 均运行 `831ab3f15f6af89d1805538b9a9c4dac04ac3526`；完整 staging 42336454110、所有者批准的 production 42337279249 均成功，复用同一产物。网站 74 项单元和 33 项相关浏览器用例通过，所有者确认菜单和版本列表正常；原 Android 1.2.9 元数据、摘要和 Range 下载保持。未修改 APK、接口或数据库，见 [交付记录](../docs/operations/admin-monitoring-delivery.md) / [#77](https://github.com/IsaacHuo/MyLeafy/issues/77)。
 

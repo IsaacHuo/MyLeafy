@@ -16,6 +16,29 @@ export type Sample = {
   maintenanceUntil: number | null;
   collectionError: string | null;
 };
+
+export function inMaintenance(
+  sample: Pick<Sample, "timestamp" | "maintenanceUntil">,
+) {
+  return (
+    sample.maintenanceUntil !== null && sample.maintenanceUntil > sample.timestamp
+  );
+}
+
+export function healthFailures(
+  name: string,
+  healthy: boolean,
+  sample: Pick<Sample, "timestamp" | "maintenanceUntil">,
+  previous: Sample | undefined,
+) {
+  if (healthy || inMaintenance(sample)) return 0;
+  const consecutive =
+    previous &&
+    !inMaintenance(previous) &&
+    sample.timestamp - previous.timestamp <= 90_000;
+  return (consecutive ? (previous.services[name]?.failures ?? 0) : 0) + 1;
+}
+
 export function observations(
   store: MonitorStore,
   sample: Sample,
@@ -42,18 +65,17 @@ export function observations(
     forMs: 0,
     value: sample.disk ?? undefined,
   });
-  const maintaining =
-    sample.maintenanceUntil !== null &&
-    sample.maintenanceUntil > sample.timestamp;
+  const maintaining = inMaintenance(sample);
   for (const [name, service] of Object.entries(sample.services)) {
     observations.push({
       key: `health:${name}`,
       title: `${name} 连续健康检查失败`,
-      failing: maintaining
-        ? null
-        : service.healthy === null
+      failing:
+        maintaining || service.healthy === null
           ? null
-          : service.failures >= 3,
+          : service.healthy
+            ? false
+            : service.failures >= 3 ? true : null,
       forMs: 0,
       value: service.failures,
     });
@@ -63,7 +85,7 @@ export function observations(
   observations.push({
     key: "http-errors",
     title: "接口 5xx 比例超过 5%",
-    failing: short.requests >= 100 ? (short.errorRate ?? 0) > 0.05 : false,
+    failing: short.requests >= 100 ? (short.errorRate ?? 0) > 0.05 : null,
     forMs: 0,
     value: short.errorRate ?? undefined,
   });
@@ -74,30 +96,6 @@ export function observations(
     forMs: 0,
     value: long.p95 ?? undefined,
   });
-  const repeated = store.db
-    .prepare(
-      "SELECT source,event,code,count(*) AS n FROM logs WHERE source<>'access' AND level='error' AND timestamp>=? GROUP BY source,event,code HAVING count(*)>=10",
-    )
-    .all(sample.timestamp - 300_000) as any[];
-  const activeRepeatKeys = new Set<string>();
-  for (const row of repeated) {
-    const key = `repeated:${row.source}:${row.event}:${row.code ?? ""}`;
-    activeRepeatKeys.add(key);
-    observations.push({
-      key,
-      title: `${row.event} 反复发生`,
-      failing: true,
-      forMs: 0,
-      value: row.n,
-    });
-  }
-  for (const row of store.db
-    .prepare(
-      "SELECT key,title FROM alerts WHERE key LIKE 'repeated:%' AND resolvedAt IS NULL",
-    )
-    .all() as any[])
-    if (!activeRepeatKeys.has(row.key))
-      observations.push({ ...row, failing: false, forMs: 0 });
   observations.push({
     key: "backup-failed",
     title: "每日备份执行失败",
@@ -148,7 +146,7 @@ export function observeEvents(
   entries: LogEntry[],
   now = Date.now(),
 ) {
-  const severe = ["oom", "unexpected_exit", "backup_failed"];
+  const alertEvents = ["oom", "unexpected_exit", "backup_failed"];
   for (const entry of entries) {
     if (entry.event === "scheduled_job_failed" && entry.code)
       store.observe(
@@ -160,7 +158,7 @@ export function observeEvents(
         },
         now,
       );
-    else if (severe.includes(entry.event))
+    else if (alertEvents.includes(entry.event))
       store.observe(
         {
           key:
@@ -177,27 +175,33 @@ export function observeEvents(
         now,
       );
   }
-  // One-off events remain visible; recovery is tied to a subsequent explicit success.
-  for (const entry of entries)
-    if (
-      entry.event === "backup_succeeded" ||
-      entry.event === "listening" ||
-      entry.event === "scheduled_job_succeeded"
-    ) {
-      const suffix =
-        entry.event === "backup_succeeded"
-          ? "backup_failed"
-          : entry.event === "listening"
-            ? "unexpected_exit"
-            : "scheduled_job_failed";
-      store.observe(
-        {
-          key: `event:${entry.source}:${suffix}`,
-          title: `${entry.source}: ${suffix}`,
-          failing: false,
-          forMs: 0,
-        },
-        now,
-      );
-    }
+}
+
+export function observeEventRecovery(
+  store: MonitorStore,
+  sample: Sample,
+  environment: string,
+) {
+  const healthy: Record<string, boolean | null | undefined> = {
+    application: sample.services[`myleafy@${environment}.service`]?.healthy,
+    caddy: sample.services["myleafy-caddy.service"]?.healthy,
+    system: sample.memory !== null && sample.memory < 85,
+  };
+  const active = store.db
+    .prepare(
+      "SELECT key,title FROM alerts WHERE key GLOB 'event:*' AND resolvedAt IS NULL",
+    )
+    .all() as Pick<Observation, "key" | "title">[];
+  const maintaining = inMaintenance(sample);
+  for (const event of active) {
+    const source = event.key.split(":")[1];
+    store.observe(
+      {
+        ...event,
+        failing: !maintaining && healthy[source] === true ? false : null,
+        forMs: 0,
+      },
+      sample.timestamp,
+    );
+  }
 }

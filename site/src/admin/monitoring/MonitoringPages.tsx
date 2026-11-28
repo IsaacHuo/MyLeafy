@@ -560,6 +560,15 @@ function Server({ value, range }: { value: Row; range: Range }) {
     </>
   );
 }
+
+function alertState(row: Row) {
+  if (row.policyRetired) return <Tag>规则已停用</Tag>;
+  if (row.resolvedAt) return <Tag color="success">已恢复</Tag>;
+  if ((row.confirmedAt ?? row.lastNotified) != null)
+    return <Tag color="error">异常</Tag>;
+  return <Tag color="warning">待确认</Tag>;
+}
+
 function Records({ kind, range }: { kind: string; range: Range }) {
   const [page, setPage] = useState(0),
     [filters, setFilters] = useState<Row>({}),
@@ -602,6 +611,7 @@ function Records({ kind, range }: { kind: string; range: Range }) {
             { title: "来源", dataIndex: "source" },
             { title: "级别", dataIndex: "level" },
             { title: "事件", dataIndex: "event" },
+            { title: "状态码", dataIndex: "status" },
             { title: "错误码", dataIndex: "code" },
           ]
         : kind === "alerts"
@@ -610,29 +620,22 @@ function Records({ kind, range }: { kind: string; range: Range }) {
               { title: "首次发现", dataIndex: "firstSeen", render: time },
               {
                 title: "状态",
-                render: (_: unknown, row: Row) => (
-                  <Tag
-                    color={
-                      row.resolvedAt
-                        ? "success"
-                        : row.lastNotified
-                          ? "error"
-                          : "warning"
-                    }
-                  >
-                    {row.resolvedAt
-                      ? "已恢复"
-                      : row.lastNotified
-                        ? "异常"
-                        : "待确认"}
-                  </Tag>
-                ),
+                render: (_: unknown, row: Row) => alertState(row),
               },
-              { title: "恢复时间", dataIndex: "resolvedAt", render: time },
+              { title: "结束时间", dataIndex: "resolvedAt", render: time },
               {
-                title: "通知状态",
+                title: "通知方式",
                 render: (_: unknown, row: Row) =>
-                  row.notification?.status ?? "尚未通知",
+                  row.notificationPolicy === "email"
+                    ? "邮件"
+                    : row.notificationPolicy === "dashboard"
+                      ? "仅后台"
+                      : "—",
+              },
+              {
+                title: "异常邮件状态",
+                render: (_: unknown, row: Row) =>
+                  row.notification?.status ?? "—",
               },
             ]
           : [

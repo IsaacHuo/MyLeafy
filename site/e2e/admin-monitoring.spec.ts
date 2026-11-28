@@ -121,10 +121,21 @@ async function setup(
             level: "error",
             event: "api_error",
             code: "internal_error",
+            status: 500,
             requestId: "request-test-1",
           },
+          {
+            id: 3,
+            timestamp: now,
+            source: "application",
+            level: "info",
+            event: "api_error",
+            code: "invalid_ticket",
+            status: 403,
+            requestId: "request-test-2",
+          },
         ],
-        total: 1,
+        total: 2,
       };
     else if (action === "monitoringAlerts")
       data = {
@@ -135,11 +146,32 @@ async function setup(
             title: "CPU 持续超过 85%",
             firstSeen: now - 300_000,
             resolvedAt: null,
-            lastNotified: now - 120_000,
-            notification: { status: "sent" },
+            confirmedAt: now - 120_000,
+            lastNotified: null,
+            notificationPolicy: "dashboard",
+          },
+          {
+            id: "alert-2",
+            key: "repeated:application:api_error:invalid_ticket",
+            title: "api_error 反复发生",
+            firstSeen: now - 600_000,
+            resolvedAt: now - 120_000,
+            notificationPolicy: "dashboard",
+            policyRetired: true,
+            notification: { status: "sent", providerId: "historical-alert-receipt" },
+          },
+          {
+            id: "alert-3",
+            key: "health:api",
+            title: "API 连续健康检查失败",
+            firstSeen: now - 600_000,
+            resolvedAt: now - 120_000,
+            notificationPolicy: "email",
+            notification: { status: "sent", providerId: "severe-alert-receipt" },
+            recoveryNotification: { status: "sent", providerId: "severe-recovery-receipt" },
           },
         ],
-        total: 1,
+        total: 3,
       };
     else if (action === "monitoringReports")
       data = {
@@ -217,13 +249,25 @@ test("monitoring presents resources, traffic, redacted logs and delivery receipt
   await expect(page.getByRole("dialog")).toContainText("request-test-1");
   await page.getByRole("button", { name: "关闭", exact: true }).click();
   await navigate(page, "应用与系统日志");
-  await expect(
-    page.getByRole("cell", { name: "api_error", exact: true }),
-  ).toBeVisible();
+  const rejection = page.getByRole("row", { name: /invalid_ticket/ });
+  await expect(rejection.getByRole("cell", { name: "info", exact: true })).toBeVisible();
+  await expect(rejection.getByRole("cell", { name: "403", exact: true })).toBeVisible();
+  await page.getByLabel("错误码", { exact: true }).fill("invalid_ticket");
+  await expect.poll(() => calls.filter((c) => c.action === "serviceLogList").at(-1)?.params.code).toBe("invalid_ticket");
   await navigate(page, "告警");
-  await expect(
-    page.getByRole("cell", { name: "CPU 持续超过 85%", exact: true }),
-  ).toBeVisible();
+  const dashboardAlert = page.getByRole("row", { name: /CPU 持续超过 85%/ });
+  await expect(dashboardAlert.getByText("异常", { exact: true })).toBeVisible();
+  await expect(dashboardAlert.getByText("仅后台", { exact: true })).toBeVisible();
+  const retiredAlert = page.getByRole("row", { name: /api_error 反复发生/ });
+  await expect(retiredAlert.getByText("规则已停用", { exact: true })).toBeVisible();
+  await retiredAlert.getByRole("button", { name: "详情" }).click();
+  await expect(page.getByRole("dialog")).toContainText("historical-alert-receipt");
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  const severeAlert = page.getByRole("row", { name: /API 连续健康检查失败/ });
+  await expect(severeAlert.getByText("邮件", { exact: true })).toBeVisible();
+  await severeAlert.getByRole("button", { name: "详情" }).click();
+  await expect(page.getByRole("dialog")).toContainText("severe-recovery-receipt");
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
   await navigate(page, "日报与发送记录");
   await expect(page.getByText("不完整", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "详情", exact: true }).click();

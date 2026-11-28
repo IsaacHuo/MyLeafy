@@ -17,7 +17,7 @@ export function queueDailyReport(
     sample: store.get("sample") ?? null,
     alerts: store.db
       .prepare(
-        "SELECT title,firstSeen,resolvedAt FROM alerts WHERE lastSeen>=? AND firstSeen<? AND (key<>'http-latency' OR firstSeen>=?)",
+        "SELECT title,firstSeen,resolvedAt FROM alerts WHERE lastSeen>=? AND firstSeen<? AND coalesce(confirmedAt,lastNotified) IS NOT NULL AND key NOT GLOB 'repeated:*' AND (key<>'http-latency' OR firstSeen>=?)",
       )
       .all(
         period.start,
@@ -151,7 +151,7 @@ export async function deliverMail(
   const delivery = store.db.transaction(() => {
     const row = store.db
       .prepare(
-        "SELECT * FROM deliveries WHERE status='pending' AND nextAttempt<=? AND (leaseUntil IS NULL OR leaseUntil<?) AND (?=0 OR kind='acceptance') ORDER BY CASE kind WHEN 'report' THEN 0 ELSE 1 END,createdAt LIMIT 1",
+      "SELECT * FROM deliveries WHERE status='pending' AND nextAttempt<=? AND (leaseUntil IS NULL OR leaseUntil<?) AND (?=0 OR kind='acceptance') ORDER BY CASE kind WHEN 'report' THEN 0 WHEN 'alert' THEN 1 ELSE 2 END,createdAt LIMIT 1",
       )
       .get(now, now, settings.acceptanceOnly ? 1 : 0) as any;
     if (row)

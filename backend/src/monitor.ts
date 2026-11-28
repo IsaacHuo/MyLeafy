@@ -20,7 +20,10 @@ import {
   maintenanceStatus,
 } from "./monitoring/sources";
 import {
+  healthFailures,
+  inMaintenance,
   observations,
+  observeEventRecovery,
   observeEvents,
   retireLegacyLatencyAlerts,
   type Sample,
@@ -89,6 +92,7 @@ if (process.argv.includes("--test-notifications")) {
   queueDailyReport(store, environment);
   store.close();
 } else {
+  store.retireLegacyAlertNotifications();
   const prometheus = new PrometheusClient(environment),
     metrics = accessMetrics();
   const email = {
@@ -161,6 +165,12 @@ if (process.argv.includes("--test-notifications")) {
         maintenanceUntil: null,
         collectionError: null,
       };
+      try {
+        sample.maintenanceUntil = await maintenanceStatus(environment, now);
+      } catch {
+        errors.push("maintenance_state_unavailable");
+      }
+      const previousSample = store.get<Sample>("sample");
       const origins = {
         website: `https://${hosts[environment][0]}/`,
         api: `https://${hosts[environment][1 + (environment === "production" ? 1 : 0)]}/health`,
@@ -168,7 +178,6 @@ if (process.argv.includes("--test-notifications")) {
       // Explicit origins only. Probes never follow redirects or send student credentials.
       await Promise.all(
         Object.entries(origins).map(async ([name, url]) => {
-          const prior = store.get<Sample>("sample")?.services[name];
           let healthy = false;
           try {
             const response = await fetch(url, {
@@ -181,7 +190,7 @@ if (process.argv.includes("--test-notifications")) {
           } catch {}
           sample.services[name] = {
             healthy,
-            failures: healthy ? 0 : (prior?.failures ?? 0) + 1,
+            failures: healthFailures(name, healthy, sample, previousSample),
             restarts: null,
           };
         }),
@@ -192,11 +201,11 @@ if (process.argv.includes("--test-notifications")) {
           if (service.Id.startsWith("myleafy-backup")) continue;
           const key = service.Id,
             restarts = Number(service.NRestarts),
-            prior = store.get<Sample>("sample")?.services[key],
+            prior = previousSample?.services[key],
             healthy = service.ActiveState === "active";
           sample.services[key] = {
             healthy,
-            failures: healthy ? 0 : (prior?.failures ?? 0) + 1,
+            failures: healthFailures(key, healthy, sample, previousSample),
             restarts,
           };
           if (
@@ -221,11 +230,6 @@ if (process.argv.includes("--test-notifications")) {
         sample.backup = await backupStatus(environment);
       } catch {
         errors.push("backup_state_unavailable");
-      }
-      try {
-        sample.maintenanceUntil = await maintenanceStatus(environment, now);
-      } catch {
-        errors.push("maintenance_state_unavailable");
       }
       // Snapshot is intentionally bounded and contains only task state, never user records.
       try {
@@ -260,11 +264,11 @@ if (process.argv.includes("--test-notifications")) {
               );
         } else {
           await response.body?.cancel();
-          if (!sample.maintenanceUntil || sample.maintenanceUntil <= now)
+          if (!inMaintenance(sample))
             errors.push("task_snapshot_unavailable");
         }
       } catch {
-        if (!sample.maintenanceUntil || sample.maintenanceUntil <= now)
+        if (!inMaintenance(sample))
           errors.push("task_snapshot_unavailable");
       }
       const previous = store.get<number>("lastCollection");
@@ -308,29 +312,7 @@ if (process.argv.includes("--test-notifications")) {
       store.set("collectionError", sample.collectionError);
       for (const observation of observations(store, sample))
         store.observe(observation, now);
-      if (!sample.maintenanceUntil || sample.maintenanceUntil <= now) {
-        for (const source of ["application", "caddy", "system"]) {
-          const healthy =
-            source === "caddy"
-              ? sample.services["myleafy-caddy.service"]?.healthy
-              : source === "system"
-                ? sample.memory !== null && sample.memory < 85
-                : sample.services[`myleafy@${environment}.service`]?.healthy;
-          if (healthy)
-            for (const row of store.db
-              .prepare(
-                "SELECT key,title FROM alerts WHERE key LIKE ? AND resolvedAt IS NULL",
-              )
-              .all(`event:${source}:%`) as any[])
-              store.observe({ ...row, failing: false, forMs: 0 }, now);
-        }
-      }
-      for (const event of store.db
-        .prepare(
-          "SELECT key,title FROM alerts WHERE recoveringAt IS NOT NULL AND resolvedAt IS NULL AND key LIKE 'event:%'",
-        )
-        .all() as any[])
-        store.observe({ ...event, failing: false, forMs: 0 }, now);
+      observeEventRecovery(store, sample, environment);
       const period = reportPeriod(now + 86_400_000),
         peakKey = "dailyPeaks:" + period.key,
         peaks = store.get<Record<string, number>>(peakKey) ?? {};
